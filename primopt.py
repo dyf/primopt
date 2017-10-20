@@ -1,3 +1,4 @@
+import argparse, os
 from skimage.draw import ellipse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -81,7 +82,18 @@ def error_function(s, current, target):
     return error
 
 if __name__ == "__main__":
-    im = scipy.misc.imread('pufferfish.jpg')[::5,::5,:].astype(float) / 255.0
-    for cim, i in optimize_image(im, 100, 100, 1000):
-        print(i)
-        scipy.misc.imsave("out/%04d.png" % i, cim)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('image')
+    parser.add_argument('N', type=int)
+    parser.add_argument('--r-its', type=int, default=100)
+    parser.add_argument('--m-its', type=int, default=100)
+    parser.add_argument('--out-dir', default='./out')
+
+    args = parser.parse_args()
+    
+    im = scipy.misc.imread(args.image).astype(float) / 255.0
+    
+    for cim, i in optimize_image(im, args.r_its, args.m_its, args.N):
+        path = os.path.join(args.out_dir, "%04d.png" % i)
+        print(path)
+        scipy.misc.imsave(path, cim)
