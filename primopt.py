@@ -1,6 +1,8 @@
 from skimage.draw import ellipse
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.stats
+import scipy.misc
 
 class Ellipse(object):
     def __init__(self, x, y, r1, r2, rot, color):
@@ -34,11 +36,12 @@ class Ellipse(object):
     
     @staticmethod
     def random(image_shape, color_dims):
+        w = min(image_shape[:2])
         r = np.random.rand(5 + color_dims)
         return Ellipse(r[0]*image_shape[0],
                        r[1]*image_shape[1],
-                       r[2]*np.linalg.norm(image_shape[:2])*0.5,
-                       r[3]*np.linalg.norm(image_shape[:2])*0.5,
+                       r[2]*w*0.5,
+                        r[3]*w*0.5,
                        2.0 * np.pi * r[4],
                        r[5:])
 
@@ -49,8 +52,6 @@ def optimize_image(target, r_its, m_its, n_prims):
     current[:,:,2] = scipy.stats.mode(target[:,:,2], axis=None).mode[0]
     
     for pi in range(n_prims):
-        print pi        
-        
         shapes = [ Ellipse.random(target.shape, 4) for i in range(r_its) ]
         errors = [ error_function(s, current, target) for s in shapes ]
         
@@ -67,10 +68,7 @@ def optimize_image(target, r_its, m_its, n_prims):
                 best_error = error            
         
         current = blend_image(current, best_shape.render(target.shape))
-        plt.imshow(current)
-        plt.show()
-        
-    return current
+        yield current, pi
     
 def blend_image(current, im):
     alpha_im = im[:,:,3]
@@ -83,8 +81,7 @@ def error_function(s, current, target):
     return error
 
 if __name__ == "__main__":
-    import scipy.misc
-    im = scipy.misc.imread('pufferfish.jpg')[::2,::2,:].astype(float) / 255.0
-    bim = optimize_image(im, 100, 100, 10)
-    plt.imshow(bim)
-    plt.show()
+    im = scipy.misc.imread('pufferfish.jpg')[::5,::5,:].astype(float) / 255.0
+    for cim, i in optimize_image(im, 100, 100, 1000):
+        print(i)
+        scipy.misc.imsave("out/%04d.png" % i, cim)
