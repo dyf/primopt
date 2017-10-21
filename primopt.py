@@ -6,84 +6,96 @@ import scipy.stats
 import scipy.misc
 
 class Primitive(object):
-    def __init__(self, params):
+    def __init__(self, params, rgb, alpha):
         self.params = np.array(params)
-
+        self.rgb = rgb
+        self.alpha = alpha
+        
     def __str__(self):
         return str(self.params)
 
     def mutate(self, d):
-        r = 1 + np.random.randn(len(self.params)) * d
-        return self.__class__(r * self.params)
+        r = 1 + np.random.randn(len(self.params)+4) * d
+        return self.__class__(r[:-4] * self.params, self.rgb * r[-4:-1], self.alpha * r[-1])
+
+    @staticmethod
+    def random_color(target):
+        x = np.random.choice(target.shape[0])
+        y = np.random.choice(target.shape[1])
+        return target[x,y]
 
 
 class Ellipse(Primitive):
     def render(self, shape):
-        x, y, r1, r2, rot, r, g, b, a = self.params
+        x, y, r1, r2, rot = self.params
         rr,cc = ellipse(x, y, r1, r2, shape[:2], rot)
         im = np.zeros( (shape[0], shape[1], 4) )
-        im[rr,cc,:] = [r,g,b,a]
+        im[rr,cc,:] = [ self.rgb[0], self.rgb[1],  self.rgb[2], self.alpha ]
         return im
 
     def scale(self, f):
-        x, y, r1, r2, rot, r, g, b, a = self.params
-        return Ellipse([x*f,y*f,r1*f,r2*f, rot, r,g,b,a])
-    
-    @staticmethod
-    def random(shape):
-        w = min(shape[:2])
-        r = np.random.rand(9)
-        return Ellipse(r * np.array([ shape[0], shape[1], w*0.5, w*0.5, 2.0*np.pi, 1.0, 1.0, 1.0, 1.0 ]))
+        x, y, r1, r2, rot = self.params
+        return Ellipse([x*f,y*f,r1*f,r2*f, rot], self.rgb, self.alpha)
 
+    @staticmethod
+    def random(target):
+        w = min(target.shape[:2])
+        r = np.random.rand(5)
+        return Ellipse(r * np.array([ target.shape[0], target.shape[1], (w+1)*0.5, (w+1)*0.5, 2.0*np.pi]), 
+                       Primitive.random_color(target), 
+                       np.random.rand())
     
 class Rectangle(Primitive):
     def render(self, shape):
-        x,y,w,h,r,g,b,a = self.params
-        p = np.array([ [ x, y ], [ x, y+h ], [ x+w, y+h ], [ x+w, y ] ]).T
+        x,y,w,h = self.params
+        p = np.array([ [x, x, x+w, x+w], [y, y+h, y+h, y] ])
 
         rr,cc = polygon(p[0,:], p[1,:], shape=shape)
         im = np.zeros( (shape[0], shape[1], 4) )
-        im[rr,cc,:] = [r,g,b,a]
+        im[rr,cc,:] = [ self.rgb[0], self.rgb[1],  self.rgb[2], self.alpha ]
         return im
 
     def scale(self, f):
-        x,y,w,h,r,g,b,a = self.params
-        return Rectangle([x*f, y*f, w*f, h*f, r, g, b, a])
+        x,y,w,h = self.params
+        return Rectangle([x*f, y*f, w*f, h*f, r, g, b, a], self.rgb, self.alpha)
 
     @staticmethod
-    def random(shape):
-        r = np.random.rand(8)
-        return Rectangle(r * np.array([shape[0], shape[1], shape[0], shape[1], 1.0, 1.0, 1.0, 1.0]))
+    def random(target):
+        r = np.random.rand(4)
+        return Rectangle(r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1]),
+                         Primitive.random_color(target),
+                         np.random.rand())
 
 class RotatedRectangle(Primitive):
     def render(self, shape):
-        x,y,w,h,th,r,g,b,a = self.params
-        p = np.array([ [ x, y ], [ x, y+h ], [ x+w, y+h ], [ x+w, y ] ]).T
-        if th:
+        x,y,w,h,th = self.params
+        p = np.array([ [x, x, x+w, x+w], [y, y+h, y+h, y] ])
+        if th != 0:
             m = np.array([[ np.cos(th), -np.sin(th)], [ np.sin(th), np.cos(th) ]])
             p = np.dot(m, p)
         
         rr,cc = polygon(p[0,:], p[1,:], shape=shape)
         im = np.zeros( (shape[0], shape[1], 4) )
-        im[rr,cc,:] = [r,g,b,a]
+        im[rr,cc,:] = [ self.rgb[0], self.rgb[1],  self.rgb[2], self.alpha ]
         return im
 
     def scale(self, f):
-        x,y,w,h,th, r,g,b,a = self.params
-        return RotatedRectangle([x*F, y*f, w*f, h*f, th, r, g, b, a])
+        x,y,w,h,th = self.params
+        return RotatedRectangle([x*F, y*f, w*f, h*f, th], self.rgb, self.alpha)
 
     @staticmethod
     def random(shape):
-        r = np.random.rand(9)
-        return RotatedRectangle(r * np.array([shape[0], shape[1], shape[0], shape[1], 2.0*np.pi, 1.0, 1.0, 1.0, 1.0]))
-
+        r = np.random.rand(5)
+        return RotatedRectangle(r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1, 2.0*np.pi]),
+                                Primitive.random_color(), 
+                                np.random.rand())
 
 class PrimitiveFactory(object):
     PRIMITIVES = { 'ellipse': Ellipse, 'rotated_rectangle': RotatedRectangle, 'rectangle': Rectangle }
 
     @staticmethod
-    def random(ptype, imshape):
-        return PrimitiveFactory.PRIMITIVES[ptype].random(imshape)
+    def random(ptype, target):
+        return PrimitiveFactory.PRIMITIVES[ptype].random(target)
 
     @staticmethod
     def new(ptype, params):
@@ -115,7 +127,7 @@ def optimize_image(target, r_its, m_its, n_prims, current=None):
         current = mode_image(target)
     
     for pi in range(n_prims):
-        shapes = [ PrimitiveFactory.random('ellipse', target.shape) for i in range(r_its) ]
+        shapes = [ PrimitiveFactory.random('ellipse', target) for i in range(r_its) ]
         errors = [ error_function(s, current, target) for s in shapes ]
         
         best_i = np.argmin(errors)
@@ -147,12 +159,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('image')
     parser.add_argument('N', type=int)
-    parser.add_argument('--r-its', type=int, default=100)
+    parser.add_argument('--r-its', type=int, default=500)
     parser.add_argument('--m-its', type=int, default=100)
     parser.add_argument('--out-dir', default='./out')
     parser.add_argument('--zoom', type=int, default=None)
     parser.add_argument('--levels', type=int, default=1)
-    parser.add_argument('--save-its', type=int, default=10)
+    parser.add_argument('--save-its', type=int, default=50)
     args = parser.parse_args()
     
     im = scipy.misc.imread(args.image).astype(float) / 255.0
