@@ -1,5 +1,6 @@
 import argparse, os
 from skimage.draw import ellipse, polygon
+from skimage.transform import resize
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
@@ -8,8 +9,8 @@ import scipy.misc
 class Primitive(object):
     def __init__(self, params, rgb, alpha):
         self.params = np.array(params)
-        self.rgb = rgb
-        self.alpha = alpha
+        self.rgb = np.array(rgb)
+        self.alpha = float(alpha)
         
     def __str__(self):
         return str(self.params)
@@ -35,7 +36,7 @@ class Ellipse(Primitive):
 
     def scale(self, f):
         x, y, r1, r2, rot = self.params
-        return Ellipse([x*f,y*f,r1*f,r2*f, rot], self.rgb, self.alpha)
+        return Ellipse([x*f, y*f, r1*f, r2*f, rot], self.rgb, self.alpha)
 
     @staticmethod
     def random(target):
@@ -44,7 +45,7 @@ class Ellipse(Primitive):
         return Ellipse(r * np.array([ target.shape[0], target.shape[1], (w+1)*0.5, (w+1)*0.5, 2.0*np.pi]), 
                        Primitive.random_color(target), 
                        np.random.rand())
-    
+
 class Rectangle(Primitive):
     def render(self, shape):
         x,y,w,h = self.params
@@ -57,7 +58,7 @@ class Rectangle(Primitive):
 
     def scale(self, f):
         x,y,w,h = self.params
-        return Rectangle([x*f, y*f, w*f, h*f, r, g, b, a], self.rgb, self.alpha)
+        return Rectangle([x*f, y*f, w*f, h*f], self.rgb, self.alpha)
 
     @staticmethod
     def random(target):
@@ -104,16 +105,16 @@ class PrimitiveFactory(object):
 def optimize_image_levels(target, r_its, m_its, n_prims, levels):
     current = mode_image(target)
 
+    pi = 0
     for level in range(levels,-1,-1):
-        f = 2 ** level
-        target_level = target[::f, ::f, :]
-        current_level = current[::f, ::f, :]
-        
-        for cim, shape, i in optimize_image(target_level, r_its, m_its, n_prims, current_level):
-            yield level+1, cim, shape, i
-            current = blend_image(current, shape.scale(float(f)).render(target.shape))
+        f = int(2 ** level)
+        target_level = target[::f,::f,:]
+        current_level = current[::f,::f,:]
 
-        yield 0, current, shape, levels-level
+        for cim, shape, i in optimize_image(target_level, r_its, m_its, n_prims, current_level):
+            current = blend_image(current, shape.scale(float(f)).render(target.shape))
+            yield current, shape, pi
+            pi += 1
 
 def mode_image(im):
     out = np.ones_like(im)
@@ -127,7 +128,7 @@ def optimize_image(target, r_its, m_its, n_prims, current=None):
         current = mode_image(target)
     
     for pi in range(n_prims):
-        shapes = [ PrimitiveFactory.random('ellipse', target) for i in range(r_its) ]
+        shapes = [ PrimitiveFactory.random('rectangle', target) for i in range(r_its) ]
         errors = [ error_function(s, current, target) for s in shapes ]
         
         best_i = np.argmin(errors)
@@ -159,12 +160,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('image')
     parser.add_argument('N', type=int)
-    parser.add_argument('--r-its', type=int, default=500)
+    parser.add_argument('--r-its', type=int, default=100)
     parser.add_argument('--m-its', type=int, default=100)
     parser.add_argument('--out-dir', default='./out')
     parser.add_argument('--zoom', type=int, default=None)
     parser.add_argument('--levels', type=int, default=1)
-    parser.add_argument('--save-its', type=int, default=50)
+    parser.add_argument('--save-its', type=int, default=100)
     args = parser.parse_args()
     
     im = scipy.misc.imread(args.image).astype(float) / 255.0
@@ -172,9 +173,9 @@ def main():
         im = im[::args.zoom,::args.zoom,:]
     
     if args.levels > 1:
-        for level, cim, shape, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels):
-            if level == 0 or i % args.save_its == 0:
-                path = os.path.join(args.out_dir, "%02d_%04d.png" % (level, i))
+        for cim, shape, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels):
+            if i % args.save_its == 0:
+                path = os.path.join(args.out_dir, "%04d.png" % i)
                 print(path, str(shape))
                 scipy.misc.imsave(path, cim)
     else:
