@@ -216,16 +216,16 @@ def error_function(s, current, target):
     return error
 
 def main():
-    parser = argparse.ArgumentParser("approximate an image with randomizied primitives")
-    parser.add_argument('image', description="target image to approximate")
-    parser.add_argument('N', type=int, description="number of primitives to generate per level of detail")
-    parser.add_argument('--r-its', description="number of random iterations to choose next seed primitive", type=int, default=500)
-    parser.add_argument('--m-its', description="number of mutation/hill climbing iterations", type=int, default=100)
-    parser.add_argument('--out-dir', description="where to save outputs", default='./out')
-    parser.add_argument('--zoom', description="zoom level of target image (e.g. optimize a 2x smaller version of input)", type=int, default=None)
-    parser.add_argument('--levels', description="number of levels of detail", type=int, default=1)
-    parser.add_argument('--save-its', description="how of to save intermediate images (e.g. every 100 frames)", type=int, default=100)
-    parser.add_argument('--prim', description="what type of primitive to use", default=PrimitiveFactory.ELLIPSE)
+    parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
+    parser.add_argument('image', help="target image to approximate")
+    parser.add_argument('N', type=int, help="number of primitives to generate per level of detail")
+    parser.add_argument('--r-its', help="number of random iterations to choose next seed primitive", type=int, default=500)
+    parser.add_argument('--m-its', help="number of mutation/hill climbing iterations", type=int, default=100)
+    parser.add_argument('--out-dir', help="where to save outputs", default='./out')
+    parser.add_argument('--zoom', help="zoom level of target image (e.g. optimize a 2x smaller version of input)", type=int, default=None)
+    parser.add_argument('--levels', help="number of levels of detail", type=int, default=1)
+    parser.add_argument('--save-its', help="how of to save intermediate images (e.g. every 100 frames)", type=int, default=100)
+    parser.add_argument('--prim', help="what type of primitive to use", default=PrimitiveFactory.ELLIPSE)
     args = parser.parse_args()
     
     im = scipy.misc.imread(args.image).astype(float) / 255.0
