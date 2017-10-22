@@ -4,25 +4,28 @@ import numpy as np
 import scipy.stats
 import scipy.misc
 
-import primitive as prim
+import primitive as primitive
 
-def optimize_image_levels(target, r_its, m_its, n_prims, levels, primitive=prim.ELLIPSE):
+def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primitive.ELLIPSE):
     current = mode_image(target)
+    buffer = np.zeros_like(current)
 
-    pi = 0
+    pi = 1
     for level in range(levels,-1,-1):
         f = int(2 ** level)
         target_level = target[::f,::f,:]
         current_level = current[::f,::f,:]
+
+        
+
         failed_images = 0
 
-        current_error = image_error(current, target)
+        current_error = primitive.image_error(current, target)
 
-        for cim, shape, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, primitive=primitive):
-            scale_shape = shape.scale(float(f))
-            
-            next = blend_image(current, scale_shape.render(target.shape))
-            error = image_error(next, target)
+        for cim, prim, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, prim_type=prim_type):
+            scale_prim = prim.scale(float(f))
+            next_im = scale_prim.draw(current, target)
+            error = primitive.image_error(next_im, target)
             
             if error > current_error:
                 failed_images += 1
@@ -33,41 +36,44 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, primitive=prim.
                 continue
             
             current_error = error
-            current = next
+            current = next_im
 
-            yield current, shape, pi
+            yield current, prim, pi
             pi += 1
-            
 
         print("finished level %d" % level)
 
-def optimize_image(target, r_its, m_its, n_prims, current=None, primitive=prim.ELLIPSE):
+def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE):
     if current is None:
         current = mode_image(target)
+
+    buffer = np.zeros_like(current)
     
     for pi in range(n_prims):       
+        current_error = primitive.image_error(current, target)
 
-        shapes = [ prim.PrimitiveFactory.random(primitive, target) for i in range(r_its) ]
-        errors = [ shape_error(s, current, target) for s in shapes ]
-        
-        best_i = np.argmin(errors)
-        best_error = errors[best_i]
-        best_shape = shapes[best_i]
-                
-        next_shape = best_shape
-        for mi in range(m_its):
-            next_shape = best_shape.mutate(.2)
-            error = shape_error(next_shape, current, target)
+        best_error = float("inf")
+        best_prim = None
+
+        for i in range(r_its):
+            prim = primitive.PrimitiveFactory.random(prim_type, target)
+            error = prim.error(current, target)
             if error < best_error:
-                best_shape = next_shape
-                best_error = error            
-
-        current_error = image_error(current, target)
+                best_prim = prim
+                best_error = error
+                
+        for i in range(m_its):
+            next_prim = best_prim.mutate(.1)
+            error = next_prim.error(current, target)
+            if error < best_error:
+                best_prim = next_prim
+                best_error = error
+        
         if best_error > current_error:
             continue 
-        
-        current = blend_image(current, best_shape.render(target.shape))
-        yield current, best_shape, pi
+
+        current = best_prim.draw(current, target)
+        yield current, best_prim, pi+1
 
 def mode_image(im):
     out = np.ones_like(im)
@@ -75,47 +81,36 @@ def mode_image(im):
     out[:,:,1] = scipy.stats.mode(im[:,:,1], axis=None).mode[0]
     out[:,:,2] = scipy.stats.mode(im[:,:,2], axis=None).mode[0]
     return out
-    
-def blend_image(current, im):
-    alpha_im = im[:,:,3]
-    return current * (1 - alpha_im)[:,:,np.newaxis] + im[:,:,:3] * alpha_im[:,:,np.newaxis]
 
-def image_error(image, target):    
-    return ((image - target) ** 2).mean()
-
-def shape_error(s, current, target):    
-    im = s.render(target.shape)    
-    blend = blend_image(current, im)
-    return image_error(blend, target)
-    
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
     parser.add_argument('image', help="target image to approximate")
     parser.add_argument('N', type=int, help="number of primitives to generate per level of detail")
-    parser.add_argument('--r-its', help="number of random iterations to choose next seed primitive", type=int, default=500)
+    parser.add_argument('--r-its', help="number of random iterations to choose next seed primitive", type=int, default=100)
     parser.add_argument('--m-its', help="number of mutation/hill climbing iterations", type=int, default=100)
     parser.add_argument('--out-dir', help="where to save outputs", default='./out')
     parser.add_argument('--zoom', help="zoom level of target image (e.g. optimize a 2x smaller version of input)", type=int, default=None)
     parser.add_argument('--levels', help="number of levels of detail", type=int, default=1)
-    parser.add_argument('--save-its', help="how of to save intermediate images (e.g. every 100 frames)", type=int, default=100)
-    parser.add_argument('--prim', help="what type of primitive to use", default=prim.ELLIPSE)
+    parser.add_argument('--save-its', help="how of to save intermediate images (e.g. every 100 frames)", type=int, default=10)
+    parser.add_argument('--prim', help="what type of primitive to use", default=primitive.ELLIPSE)
     args = parser.parse_args()
     
     im = scipy.misc.imread(args.image).astype(float) / 255.0
     if args.zoom:
         im = im[::args.zoom,::args.zoom,:]
-    
+
     if args.levels > 1:
-        for cim, shape, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, primitive=args.prim):
+        for cim, prim, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
             if i % args.save_its == 0:
                 path = os.path.join(args.out_dir, "%04d.png" % i)
-                print(path, str(shape))
+                print(path, str(prim))
                 scipy.misc.imsave(path, cim)
     else:
-        for cim, shape, i in optimize_image(im, args.r_its, args.m_its, args.N, primitive=args.prim):
+        for cim, prim, i in optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):
+
             if i % args.save_its == 0:
                 path = os.path.join(args.out_dir, "%04d.png" % i)
-                print(path, str(shape))
+                print(path, str(prim))
                 scipy.misc.imsave(path, cim)
 
 if __name__ == "__main__": main()
