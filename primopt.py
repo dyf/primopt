@@ -169,11 +169,32 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, primitive=Primi
         f = int(2 ** level)
         target_level = target[::f,::f,:]
         current_level = current[::f,::f,:]
+        failed_images = 0
+
+        current_error = image_error(current, target)
 
         for cim, shape, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, primitive=primitive):
-            current = blend_image(current, shape.scale(float(f)).render(target.shape))
+            scale_shape = shape.scale(float(f))
+            
+            next = blend_image(current, scale_shape.render(target.shape))
+            error = image_error(next, target)
+            
+            if error > current_error:
+                failed_images += 1
+                if failed_images > 20:
+                    print "stopping with this level, too many failed images"
+                    break
+                
+                continue
+            
+            current_error = error
+            current = next
+
             yield current, shape, pi
             pi += 1
+            
+
+        print "finished level"
 
 def mode_image(im):
     out = np.ones_like(im)
@@ -186,9 +207,10 @@ def optimize_image(target, r_its, m_its, n_prims, current=None, primitive=Primit
     if current is None:
         current = mode_image(target)
     
-    for pi in range(n_prims):
+    for pi in range(n_prims):       
+
         shapes = [ PrimitiveFactory.random(primitive, target) for i in range(r_its) ]
-        errors = [ error_function(s, current, target) for s in shapes ]
+        errors = [ shape_error(s, current, target) for s in shapes ]
         
         best_i = np.argmin(errors)
         best_error = errors[best_i]
@@ -197,10 +219,14 @@ def optimize_image(target, r_its, m_its, n_prims, current=None, primitive=Primit
         next_shape = best_shape
         for mi in range(m_its):
             next_shape = best_shape.mutate(.2)
-            error = error_function(next_shape, current, target)
+            error = shape_error(next_shape, current, target)
             if error < best_error:
                 best_shape = next_shape
                 best_error = error            
+
+        current_error = image_error(current, target)
+        if best_error > current_error:
+            continue 
         
         current = blend_image(current, best_shape.render(target.shape))
         yield current, best_shape, pi
@@ -209,12 +235,15 @@ def blend_image(current, im):
     alpha_im = im[:,:,3]
     return current * (1 - alpha_im)[:,:,np.newaxis] + im[:,:,:3] * alpha_im[:,:,np.newaxis]
 
-def error_function(s, current, target):    
+def image_error(image, target):    
+    return ((image - target) ** 2).mean()
+    #return np.sqrt(((image - target) ** 2)).mean()
+
+def shape_error(s, current, target):    
     im = s.render(target.shape)    
     blend = blend_image(current, im)
-    error = np.sqrt(((blend - target) ** 2)).mean()
-    return error
-
+    return image_error(blend, target)
+    
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
     parser.add_argument('image', help="target image to approximate")
