@@ -109,14 +109,49 @@ class Circle(Primitive):
                       Primitive.random_color(target), 
                       np.random.rand())
 
+class Polygon(Primitive):
+    def render(self, shape):
+        x,y,r,th = self.params
+        angles = np.linspace(0, 2*np.pi, num=self.sides, endpoint=False)
+        p =  np.array([ x + r * np.cos(angles), y + r * np.sin(angles) ])
+
+        if th != 0:
+            m = np.array([[ np.cos(th), -np.sin(th)], [ np.sin(th), np.cos(th) ]])
+            p = np.dot(m, p)
+
+        rr,cc = polygon(p[0,:], p[1,:], shape=shape)
+        im = np.zeros( (shape[0], shape[1], 4) )
+        im[rr,cc,:] = [ self.rgb[0], self.rgb[1],  self.rgb[2], self.alpha ]
+
+        return im
+
+    def scale(self, f):
+        x,y,r,th = self.params
+        return self.__class__([x*f,y*f,r*f,th], self.rgb, self.alpha)
+
+    @classmethod
+    def random(cls, target):
+        r = np.random.rand(4)
+        w = np.min(target.shape[:2])
+        return cls(r * np.array([ target.shape[0], target.shape[1], w*0.5, 2*np.pi ]),
+                   Primitive.random_color(target), 
+                   np.random.rand())
+
+class Triangle(Polygon):
+    sides = 3
+    
+class Hexagon(Polygon):
+    sides = 6
 
 class PrimitiveFactory(object):
     ELLIPSE = 'ellipse'
     ROTATED_RECTANGLE = 'rotated_rectangle'
     RECTANGLE = 'rectangle'
     CIRCLE = 'circle'
+    TRIANGLE = 'triangle'
+    HEXAGON = 'hexagon'
 
-    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle }
+    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle, TRIANGLE: Triangle, HEXAGON: Hexagon }
 
     @staticmethod
     def random(ptype, target):
