@@ -47,7 +47,7 @@ def optimize_image(target, r_its, m_its, n_prims, current=None, primitive=prim.E
     
     for pi in range(n_prims):       
 
-        shapes = [ PrimitiveFactory.random(primitive, target) for i in range(r_its) ]
+        shapes = [ prim.PrimitiveFactory.random(primitive, target) for i in range(r_its) ]
         errors = [ shape_error(s, current, target) for s in shapes ]
         
         best_i = np.argmin(errors)
