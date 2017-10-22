@@ -1,5 +1,5 @@
 import argparse, os
-from skimage.draw import ellipse, polygon
+from skimage.draw import ellipse, polygon, circle
 from skimage.transform import resize
 import matplotlib.pyplot as plt
 import numpy as np
@@ -82,17 +82,41 @@ class RotatedRectangle(Primitive):
 
     def scale(self, f):
         x,y,w,h,th = self.params
-        return RotatedRectangle([x*F, y*f, w*f, h*f, th], self.rgb, self.alpha)
+        return RotatedRectangle([x*f, y*f, w*f, h*f, th], self.rgb, self.alpha)
 
     @staticmethod
-    def random(shape):
+    def random(target):
         r = np.random.rand(5)
         return RotatedRectangle(r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1, 2.0*np.pi]),
-                                Primitive.random_color(), 
+                                Primitive.random_color(target), 
                                 np.random.rand())
+class Circle(Primitive):
+    def render(self, shape):
+        x,y,r = self.params
+        rr,cc = circle(x, y, r, shape=shape)
+        im = np.zeros( (shape[0], shape[1], 4) )
+        im[rr,cc,:] = [ self.rgb[0], self.rgb[1],  self.rgb[2], self.alpha ]
+        return im
+
+    def scale(self, f):
+        x,y,r = self.params
+        return Circle([x*f,y*f,r*f], self.rgb, self.alpha)
+
+    @staticmethod
+    def random(target):
+        r = np.random.rand(3)
+        return Circle(r * np.array([target.shape[0], target.shape[1], min(target.shape[:2])]),
+                      Primitive.random_color(target), 
+                      np.random.rand())
+
 
 class PrimitiveFactory(object):
-    PRIMITIVES = { 'ellipse': Ellipse, 'rotated_rectangle': RotatedRectangle, 'rectangle': Rectangle }
+    ELLIPSE = 'ellipse'
+    ROTATED_RECTANGLE = 'rotated_rectangle'
+    RECTANGLE = 'rectangle'
+    CIRCLE = 'circle'
+
+    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle }
 
     @staticmethod
     def random(ptype, target):
@@ -102,7 +126,7 @@ class PrimitiveFactory(object):
     def new(ptype, params):
         return PrimitiveFactory.PRIMITIVES[ptype](params)
 
-def optimize_image_levels(target, r_its, m_its, n_prims, levels):
+def optimize_image_levels(target, r_its, m_its, n_prims, levels, primitive=PrimitiveFactory.ELLIPSE):
     current = mode_image(target)
 
     pi = 0
@@ -111,7 +135,7 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels):
         target_level = target[::f,::f,:]
         current_level = current[::f,::f,:]
 
-        for cim, shape, i in optimize_image(target_level, r_its, m_its, n_prims, current_level):
+        for cim, shape, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, primitive=primitive):
             current = blend_image(current, shape.scale(float(f)).render(target.shape))
             yield current, shape, pi
             pi += 1
@@ -123,12 +147,12 @@ def mode_image(im):
     out[:,:,2] = scipy.stats.mode(im[:,:,2], axis=None).mode[0]
     return out
 
-def optimize_image(target, r_its, m_its, n_prims, current=None):
+def optimize_image(target, r_its, m_its, n_prims, current=None, primitive=PrimitiveFactory.ELLIPSE):
     if current is None:
         current = mode_image(target)
     
     for pi in range(n_prims):
-        shapes = [ PrimitiveFactory.random('rectangle', target) for i in range(r_its) ]
+        shapes = [ PrimitiveFactory.random(primitive, target) for i in range(r_its) ]
         errors = [ error_function(s, current, target) for s in shapes ]
         
         best_i = np.argmin(errors)
@@ -160,12 +184,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('image')
     parser.add_argument('N', type=int)
-    parser.add_argument('--r-its', type=int, default=100)
+    parser.add_argument('--r-its', type=int, default=500)
     parser.add_argument('--m-its', type=int, default=100)
     parser.add_argument('--out-dir', default='./out')
     parser.add_argument('--zoom', type=int, default=None)
     parser.add_argument('--levels', type=int, default=1)
     parser.add_argument('--save-its', type=int, default=100)
+    parser.add_argument('--prim', default=PrimitiveFactory.ELLIPSE)
     args = parser.parse_args()
     
     im = scipy.misc.imread(args.image).astype(float) / 255.0
@@ -173,13 +198,13 @@ def main():
         im = im[::args.zoom,::args.zoom,:]
     
     if args.levels > 1:
-        for cim, shape, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels):
+        for cim, shape, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, primitive=args.prim):
             if i % args.save_its == 0:
                 path = os.path.join(args.out_dir, "%04d.png" % i)
                 print(path, str(shape))
                 scipy.misc.imsave(path, cim)
     else:
-        for cim, shape, i in optimize_image(im, args.r_its, args.m_its, args.N):
+        for cim, shape, i in optimize_image(im, args.r_its, args.m_its, args.N, primitive=args.prim):
             if i % args.save_its == 0:
                 path = os.path.join(args.out_dir, "%04d.png" % i)
                 print(path, str(shape))
