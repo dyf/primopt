@@ -8,7 +8,7 @@ Or: personal challenge to see how quickly I could hack something like https://gi
 
 ![Swedish Chef in Ellipses](https://github.com/dyf/primopt/blob/master/examples/swedish.png)
 
-~[Beaker in Triangles](https://github.com/dyf/primopt/blob/master/examples/beaker.png)
+![Beaker in Triangles](https://github.com/dyf/primopt/blob/master/examples/beaker.png)
 
 Pseudocode:
 
