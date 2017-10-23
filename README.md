@@ -8,6 +8,8 @@ Or: personal challenge to see how quickly I could hack something like https://gi
 
 ![Swedish Chef in Ellipses](https://github.com/dyf/primopt/blob/master/examples/swedish.png)
 
+~[Beaker in Triangles](https://github.com/dyf/primopt/blob/master/examples/beaker.png)
+
 Pseudocode:
 
 1) Pick `M` random circles (position, size) with random alpha and random color chosen from input image
