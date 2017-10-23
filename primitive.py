@@ -15,13 +15,14 @@ class Primitive(object):
     def __init__(self, params, alpha):
         self.params = np.array(params)
         self.alpha = float(alpha)
+        self.color = None
         
     def __str__(self):
         return str(self.params)
 
     def select_color(self, current, target, mask_px):
         idx = np.random.choice(len(mask_px[0]))
-        return target[mask_px[0][idx], mask_px[1][idx], :]
+        return target[mask_px[0][idx], mask_px[1][idx], :].copy()
 
     def draw(self, current, target):
         mask_px = self.rasterize(target.shape)
@@ -31,14 +32,16 @@ class Primitive(object):
         if len(mask_px[0]) == 0:
             return out
         
-        color = self.select_color(current, target, mask_px)
-        
-        out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + color * self.alpha
+        if self.color is None:
+            self.color = self.select_color(current, target, mask_px)
+
+        out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
 
         return out
 
     def error(self, current, target):
         blend = self.draw(current, target)
+
         return image_error(blend, target)
 
     def mutate(self, d):

@@ -1,32 +1,32 @@
 import argparse, os
-from skimage.transform import resize
+from scipy.ndimage.interpolation import zoom
 import numpy as np
 import scipy.stats
 import scipy.misc
-
+import matplotlib.pyplot as plt
 import primitive as primitive
 
 def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primitive.ELLIPSE):
     current = mode_image(target)
-    buffer = np.zeros_like(current)
 
     pi = 1
-    for level in range(levels,-1,-1):
-        f = int(2 ** level)
-        target_level = target[::f,::f,:]
-        current_level = current[::f,::f,:]
-
+    for level in range(levels,0,-1):
+        f = 2 ** level
+        target_level = target[::f,::f,:].copy()
+        current_level = current[::f,::f,:].copy()
+        #f = float(target.shape[0]) / float(target_level.shape[0]) 
         
-
         failed_images = 0
 
         current_error = primitive.image_error(current, target)
 
         for cim, prim, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, prim_type=prim_type):
             scale_prim = prim.scale(float(f))
+            scale_prim.color = prim.color
+
             next_im = scale_prim.draw(current, target)
             error = primitive.image_error(next_im, target)
-            
+
             if error > current_error:
                 failed_images += 1
                 if failed_images > 20:
@@ -36,19 +36,23 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primi
                 continue
             
             current_error = error
-            current = next_im
+            np.copyto(current,next_im)
 
-            yield current, prim, pi
+            yield current, scale_prim, pi
             pi += 1
 
         print("finished level %d" % level)
 
+    for cim, prim, i in optimize_image(target, r_its, m_its, n_prims, current, prim_type=prim_type):
+        yield cim, prim, pi
+        pi += 1
+
 def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE):
     if current is None:
         current = mode_image(target)
+    else:
+        current = current.copy()
 
-    buffer = np.zeros_like(current)
-    
     for pi in range(n_prims):       
         current_error = primitive.image_error(current, target)
 
