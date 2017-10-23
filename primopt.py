@@ -1,118 +1,8 @@
-import argparse, os
-from scipy.ndimage.interpolation import zoom
-import numpy as np
-import scipy.stats
+import os, argparse
 import scipy.misc
-import primitive as primitive
-import multiprocessing as mp
-import time
 
-def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primitive.ELLIPSE):
-    current = mode_image(target)
-
-    pi = 1
-    for level in range(levels,0,-1):
-        f = 2 ** level
-        target_level = target[::f,::f,:].copy()
-        current_level = current[::f,::f,:].copy()
-        #f = float(target.shape[0]) / float(target_level.shape[0]) 
-        
-        failed_images = 0
-
-        current_error = primitive.image_error(current, target)
-
-        for cim, prim, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, prim_type=prim_type):
-            scale_prim = prim.scale(float(f))
-            scale_prim.color = prim.color
-
-            next_im = scale_prim.draw(current, target)
-            error = primitive.image_error(next_im, target)
-
-            if error > current_error:
-                failed_images += 1
-                if failed_images > 20:
-                    print("stopping with level, too many failed images")
-                    break
-
-                continue
-            
-            current_error = error
-            np.copyto(current,next_im)
-
-            yield current, scale_prim, pi
-            pi += 1
-
-        print("finished level %d" % level)
-
-    for cim, prim, i in optimize_image(target, r_its, m_its, n_prims, current, prim_type=prim_type):
-        yield cim, prim, pi
-        pi += 1
-
-
-def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
-    np.random.seed(seed=int(time.time())+os.getpid())
-    
-    best_error = float("inf")
-    best_prim = None
-
-    for i in range(r_its):
-        prim = primitive.PrimitiveFactory.random(prim_type, target)
-        error = prim.error(current, target)
-        if error < best_error:
-            best_prim = prim
-            best_error = error
-                
-    for i in range(m_its):
-        next_prim = best_prim.mutate(m_fac)
-        error = next_prim.error(current, target)
-        if error < best_error:
-            best_prim = next_prim
-            best_error = error
-
-    return (best_error, best_prim.params, best_prim.color, best_prim.alpha)
-
-
-def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE, m_fac=.1):
-    if current is None:
-        current = mode_image(target)
-    else:
-        current = current.copy()
-
-    for pi in range(n_prims):       
-        current_error = primitive.image_error(current, target)
-
-        if POOL:
-            nprocs = POOL._processes
-            resps = []
-            for i in range(POOL._processes):
-                resp = POOL.apply_async(optimize_image_primitive, args=(target, current, r_its//nprocs, m_its//nprocs, prim_type, m_fac))
-                resps.append(resp)
-
-            resps = [ r.get() for r in resps ]
-            errors = np.array(r[0] for r in resps)
-
-            best_i = np.argmin(errors)
-            best_error, best_params, best_color, best_alpha = resps[best_i]
-        else:
-            best_error, best_params, best_color, best_alpha = optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac)
-        
-        if best_error > current_error:
-            continue 
-
-        best_prim = primitive.PrimitiveFactory.new(prim_type, best_params, best_alpha)
-        best_prim.color = best_color
-        
-        current = best_prim.draw(current, target)
-        yield current, best_prim, pi+1
-
-def mode_image(im):
-    out = np.ones_like(im)
-    out[:,:,0] = scipy.stats.mode(im[:,:,0], axis=None).mode[0]
-    out[:,:,1] = scipy.stats.mode(im[:,:,1], axis=None).mode[0]
-    out[:,:,2] = scipy.stats.mode(im[:,:,2], axis=None).mode[0]
-    return out
-
-POOL = None
+import optimize as opt
+import primitive
 
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
@@ -129,25 +19,20 @@ def main():
 
     args = parser.parse_args()
 
-    global POOL
-    if args.procs is None:
-        args.procs = mp.cpu_count()
-    if args.procs > 1:
-        POOL = mp.Pool(processes=args.procs)
+    opt.init_pool(args.procs)
 
     im = scipy.misc.imread(args.image).astype(float) / 255.0
     if args.zoom:
         im = im[::args.zoom,::args.zoom,:]
 
-
     if args.levels > 1:
-        for cim, prim, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
+        for cim, prim, i in opt.optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
             if i % args.save_its == 0:
                 path = os.path.join(args.out_dir, "%05d.png" % i)
                 print(path, str(prim))
                 scipy.misc.imsave(path, cim)
     else:
-        for cim, prim, i in optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):
+        for cim, prim, i in opt.optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):
 
             if i % args.save_its == 0:
                 path = os.path.join(args.out_dir, "%05d.png" % i)
