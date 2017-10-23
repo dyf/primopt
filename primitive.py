@@ -152,5 +152,5 @@ class PrimitiveFactory(object):
         return PrimitiveFactory.PRIMITIVES[ptype].random(target)
 
     @staticmethod
-    def new(ptype, params):
-        return PrimitiveFactory.PRIMITIVES[ptype](params)
+    def new(ptype, params, alpha):
+        return PrimitiveFactory.PRIMITIVES[ptype](params, alpha)

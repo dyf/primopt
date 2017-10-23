@@ -3,8 +3,9 @@ from scipy.ndimage.interpolation import zoom
 import numpy as np
 import scipy.stats
 import scipy.misc
-import matplotlib.pyplot as plt
 import primitive as primitive
+import multiprocessing as mp
+import time
 
 def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primitive.ELLIPSE):
     current = mode_image(target)
@@ -47,7 +48,31 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primi
         yield cim, prim, pi
         pi += 1
 
-def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE):
+
+def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
+    np.random.seed(seed=int(time.time())+os.getpid())
+    
+    best_error = float("inf")
+    best_prim = None
+
+    for i in range(r_its):
+        prim = primitive.PrimitiveFactory.random(prim_type, target)
+        error = prim.error(current, target)
+        if error < best_error:
+            best_prim = prim
+            best_error = error
+                
+    for i in range(m_its):
+        next_prim = best_prim.mutate(m_fac)
+        error = next_prim.error(current, target)
+        if error < best_error:
+            best_prim = next_prim
+            best_error = error
+
+    return (best_error, best_prim.params, best_prim.color, best_prim.alpha)
+
+
+def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE, m_fac=.1):
     if current is None:
         current = mode_image(target)
     else:
@@ -56,26 +81,27 @@ def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primit
     for pi in range(n_prims):       
         current_error = primitive.image_error(current, target)
 
-        best_error = float("inf")
-        best_prim = None
+        if POOL:
+            nprocs = POOL._processes
+            resps = []
+            for i in range(POOL._processes):
+                resp = POOL.apply_async(optimize_image_primitive, args=(target, current, r_its//nprocs, m_its//nprocs, prim_type, m_fac))
+                resps.append(resp)
 
-        for i in range(r_its):
-            prim = primitive.PrimitiveFactory.random(prim_type, target)
-            error = prim.error(current, target)
-            if error < best_error:
-                best_prim = prim
-                best_error = error
-                
-        for i in range(m_its):
-            next_prim = best_prim.mutate(.1)
-            error = next_prim.error(current, target)
-            if error < best_error:
-                best_prim = next_prim
-                best_error = error
+            resps = [ r.get() for r in resps ]
+            errors = np.array(r[0] for r in resps)
+
+            best_i = np.argmin(errors)
+            best_error, best_params, best_color, best_alpha = resps[best_i]
+        else:
+            best_error, best_params, best_color, best_alpha = optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac)
         
         if best_error > current_error:
             continue 
 
+        best_prim = primitive.PrimitiveFactory.new(prim_type, best_params, best_alpha)
+        best_prim.color = best_color
+        
         current = best_prim.draw(current, target)
         yield current, best_prim, pi+1
 
@@ -86,34 +112,45 @@ def mode_image(im):
     out[:,:,2] = scipy.stats.mode(im[:,:,2], axis=None).mode[0]
     return out
 
+POOL = None
+
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
     parser.add_argument('image', help="target image to approximate")
     parser.add_argument('N', type=int, help="number of primitives to generate per level of detail")
-    parser.add_argument('--r-its', help="number of random iterations to choose next seed primitive", type=int, default=100)
+    parser.add_argument('--r-its', help="number of random iterations to choose next seed primitive", type=int, default=500)
     parser.add_argument('--m-its', help="number of mutation/hill climbing iterations", type=int, default=100)
     parser.add_argument('--out-dir', help="where to save outputs", default='./out')
     parser.add_argument('--zoom', help="zoom level of target image (e.g. optimize a 2x smaller version of input)", type=int, default=None)
     parser.add_argument('--levels', help="number of levels of detail", type=int, default=1)
     parser.add_argument('--save-its', help="how of to save intermediate images (e.g. every 100 frames)", type=int, default=10)
     parser.add_argument('--prim', help="what type of primitive to use", default=primitive.ELLIPSE)
+    parser.add_argument('--procs', help="how many processes to use", default=None, type=int)
+
     args = parser.parse_args()
-    
+
+    global POOL
+    if args.procs is None:
+        args.procs = mp.cpu_count()
+    if args.procs > 1:
+        POOL = mp.Pool(processes=args.procs)
+
     im = scipy.misc.imread(args.image).astype(float) / 255.0
     if args.zoom:
         im = im[::args.zoom,::args.zoom,:]
 
+
     if args.levels > 1:
         for cim, prim, i in optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
             if i % args.save_its == 0:
-                path = os.path.join(args.out_dir, "%04d.png" % i)
+                path = os.path.join(args.out_dir, "%05d.png" % i)
                 print(path, str(prim))
                 scipy.misc.imsave(path, cim)
     else:
         for cim, prim, i in optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):
 
             if i % args.save_its == 0:
-                path = os.path.join(args.out_dir, "%04d.png" % i)
+                path = os.path.join(args.out_dir, "%05d.png" % i)
                 print(path, str(prim))
                 scipy.misc.imsave(path, cim)
 
