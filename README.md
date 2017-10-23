@@ -4,7 +4,9 @@ PRimitive IMage OPtimizer
 
 Compose an image from random primitives (circles, triangles, ellipses, etc).  
 
-or: personal challenge to see how quickly I could hack something like https://github.com/fogleman/primitive together in python.
+Or: personal challenge to see how quickly I could hack something like https://github.com/fogleman/primitive together in python.
+
+![Swedish Chef in Ellipses](https://github.com/dyf/primopt/blob/master/examples/swedish.png)
 
 Pseudocode:
 
