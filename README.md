@@ -11,6 +11,8 @@ Or: personal challenge to see how quickly I could hack something like https://gi
 
 ### Triangular Beaker
 ![Beaker in Triangles](https://github.com/dyf/primopt/blob/master/examples/beaker.png)
+
+### Rectangular Beaker
 ![Beaker in Triangles](https://github.com/dyf/primopt/blob/master/examples/beaker2.png)
 
 ### Hexagonal Animal
