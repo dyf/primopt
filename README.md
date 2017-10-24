@@ -6,15 +6,17 @@ Compose an image from random primitives (circles, triangles, ellipses, etc).
 
 Or: personal challenge to see how quickly I could hack something like https://github.com/fogleman/primitive together in python.
 
-Elliptical Swedish Chef
 ![Swedish Chef in Ellipses](https://github.com/dyf/primopt/blob/master/examples/swedish.png)
 
-Triangular Beaker
+Elliptical Swedish Chef
+
 ![Beaker in Triangles](https://github.com/dyf/primopt/blob/master/examples/beaker.png)
 
-Hexagonal Animal
+Triangular Beaker
+
 ![Animal in Hexagons](https://github.com/dyf/primopt/blob/master/examples/animal.png)
 
+Hexagonal Animal
 
 Pseudocode:
 
