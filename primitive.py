@@ -36,9 +36,9 @@ class Primitive(object):
 
 class ImagePrimitive(Primitive):
     def select_color(self, current, target, image):
-        image_px = np.where(image != 0)
-        idx = np.random.choice(len(image_px[0]))
-        return target[image_px[0][idx], image_px[1][idx], :].copy()
+        x = np.random.choice(target.shape[0])
+        y = np.random.choice(target.shape[1])
+        return target[x, y, :].copy()
 
     def draw(self, current, target):
         image = self.rasterize(target.shape)
@@ -46,15 +46,17 @@ class ImagePrimitive(Primitive):
         out = current.copy()
         
         if self.color is None:
-            self.color = self.select_color(current, target, image)
+            self.color = self.select_color(current, target, image)        
 
-        out = out * (1.0 - self.alpha) + self.color * image[:,:,np.newaxis] * self.alpha
+        a_im = image * self.alpha
+
+        out = out * (1.0 - a_im[:,:,np.newaxis]) + self.color * a_im[:,:,np.newaxis]
 
         return out
 
 class Sine(ImagePrimitive):
     def rasterize(self, shape):
-        sf, phase, amp, th = self.params        
+        sf, phase, th = self.params        
         xx,yy = np.mgrid[0:shape[0],0:shape[1]]
 
         if th != 0:
@@ -62,16 +64,16 @@ class Sine(ImagePrimitive):
             yr = np.sin(th)*xx + np.cos(th)*yy
             xx, yy = xr, yr                
         
-        return amp * (np.sin(2*np.pi*xx*sf-phase) * 0.5 + 1)
+        return np.sin(2*np.pi*xx*sf-phase) * 0.5 + 1
 
     def scale(self, f):
-        sf, phase, amp, th = self.params
-        return Sine([sf*f, phase*f, amp, th], self.alpha)
+        sf, phase, th = self.params
+        return Sine([sf*f, phase*f,th], self.alpha)
 
     @staticmethod
     def random(target):
-        r = np.random.rand(5)
-        return Sine([ 1.0 / (target.shape[0] * r[0]), r[1]*target.shape[1], r[2], r[3]*np.pi*2 ],  r[4])
+        r = np.random.rand(4)
+        return Sine([ 1.0 / (target.shape[0] * r[0]), r[1]*target.shape[1], r[2]*np.pi*2 ],  r[3])
 
 class ShapePrimitive(Primitive):
     def select_color(self, current, target, mask_px):
