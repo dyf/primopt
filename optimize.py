@@ -90,7 +90,7 @@ def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primit
     else:
         current = current.copy()
 
-    for pi in range(n_prims):       
+    for pi in range(n_prims):               
         current_error = primitive.image_error(current, target)
 
         if POOL:
