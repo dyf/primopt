@@ -4,6 +4,12 @@ import scipy.misc
 import optimize as opt
 import primitive
 
+def save(i, save_its, out_dir, cim):
+    if i % save_its == 0:
+        path = os.path.join(out_dir, "%05d.png" % i)
+        print(path)
+        scipy.misc.imsave(path, cim)
+        
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
     parser.add_argument('image', help="target image to approximate")
@@ -27,16 +33,9 @@ def main():
 
     if args.levels > 1:
         for cim, prim, i in opt.optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
-            if i % args.save_its == 0:
-                path = os.path.join(args.out_dir, "%05d.png" % i)
-                print(path, str(prim))
-                scipy.misc.imsave(path, cim)
+            save(i, args.save_its, args.out_dir, cim)
     else:
         for cim, prim, i in opt.optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):
-
-            if i % args.save_its == 0:
-                path = os.path.join(args.out_dir, "%05d.png" % i)
-                print(path, str(prim))
-                scipy.misc.imsave(path, cim)
+            save(i, args.save_its, args.out_dir, cim)
 
 if __name__ == "__main__": main()

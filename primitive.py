@@ -7,7 +7,7 @@ RECTANGLE = 'rectangle'
 CIRCLE = 'circle'
 TRIANGLE = 'triangle'
 HEXAGON = 'hexagon'
-SINE = 'sine'
+COSINE = 'cosine'
 
 def image_error(image, target):    
     return ((image - target) ** 2).mean()
@@ -20,11 +20,7 @@ class Primitive(object):
     def __init__(self, params, alpha):
         self.params = np.array(params)
         self.alpha = float(alpha)
-        self.color = None
         
-    def __str__(self):
-        return str(self.params)
-
     def error(self, current, target):
         blend = self.draw(current, target)
 
@@ -35,47 +31,44 @@ class Primitive(object):
         return self.__class__(r[:-1] * self.params, self.alpha * r[-1])
 
 class ImagePrimitive(Primitive):
-    def select_color(self, current, target, image):
-        x = np.random.choice(target.shape[0])
-        y = np.random.choice(target.shape[1])
-        return target[x, y, :].copy()
+    def __init__(self, params, alpha):
+        super(ImagePrimitive, self).__init__(params, alpha)        
+        self.channel = None
 
     def draw(self, current, target):
         image = self.rasterize(target.shape)
 
         out = current.copy()
         
-        if self.color is None:
-            self.color = self.select_color(current, target, image)        
+        if self.channel is None:
+            self.channel = np.random.randint(0,3)
 
-        a_im = image * self.alpha
-
-        out = out * (1.0 - a_im[:,:,np.newaxis]) + self.color * a_im[:,:,np.newaxis]
+        out[:,:,self.channel] += image * self.alpha
 
         return out
 
-class Sine(ImagePrimitive):
+class Cosine(ImagePrimitive):
     def rasterize(self, shape):
-        sf, phase, th = self.params        
+        sfx, sfy = self.params        
         xx,yy = np.mgrid[0:shape[0],0:shape[1]]
 
-        if th != 0:
-            xr = np.cos(th)*xx - np.sin(th)*yy
-            yr = np.sin(th)*xx + np.cos(th)*yy
-            xx, yy = xr, yr                
-        
-        return np.sin(2*np.pi*xx*sf-phase) * 0.5 + 1
+        return (np.cos(2*np.pi*xx*sfx) + np.cos(2*np.pi*yy*sfy))* 0.5 + 1
 
     def scale(self, f):
-        sf, phase, th = self.params
-        return Sine([sf*f, phase*f,th], self.alpha)
+        sfx, sfy = self.params
+        return Cosine([sfx*f, sfy*f], self.alpha)
 
     @staticmethod
     def random(target):
-        r = np.random.rand(4)
-        return Sine([ 1.0 / (target.shape[0] * r[0]), r[1]*target.shape[1], r[2]*np.pi*2 ],  r[3])
+        r = np.random.rand(3)
+        return Cosine([ 1.0 / (target.shape[0] * r[0]), 1.0 / (target.shape[1] * r[1]) ], r[2]*2.0 - 1.0)
+                      
 
 class ShapePrimitive(Primitive):
+    def __init__(self, params, alpha, color=None):
+        super(ShapePrimitive, self).__init__(params, alpha)        
+        self.color = color
+        
     def select_color(self, current, target, mask_px):
         idx = np.random.choice(len(mask_px[0]))
         return target[mask_px[0][idx], mask_px[1][idx], :].copy()
@@ -119,7 +112,7 @@ class Rectangle(ShapePrimitive):
 
     def scale(self, f):
         x,y,w,h = self.params
-        return Rectangle([x*f, y*f, w*f, h*f], self.alpha)
+        return Rectangle([x*f, y*f, w*f, h*f], self.alpha, self.color)
 
     @staticmethod
     def random(target):
@@ -138,7 +131,7 @@ class RotatedRectangle(ShapePrimitive):
         
     def scale(self, f):
         x,y,w,h,th = self.params
-        return RotatedRectangle([x*f, y*f, w*f, h*f, th], self.alpha)
+        return RotatedRectangle([x*f, y*f, w*f, h*f, th], self.alpha, self.color)
 
     @staticmethod
     def random(target):
@@ -152,7 +145,7 @@ class Circle(ShapePrimitive):
 
     def scale(self, f):
         x,y,r = self.params
-        return Circle([x*f,y*f,r*f], self.alpha)
+        return Circle([x*f,y*f,r*f], self.alpha, self.color)
 
     @staticmethod
     def random(target):
@@ -173,7 +166,7 @@ class Polygon(ShapePrimitive):
 
     def scale(self, f):
         x,y,r,th = self.params
-        return self.__class__([x*f,y*f,r*f,th], self.alpha)
+        return self.__class__([x*f,y*f,r*f,th], self.alpha, self.color)
 
     @classmethod
     def random(cls, target):
@@ -189,12 +182,12 @@ class Hexagon(Polygon):
     sides = 6
 
 class PrimitiveFactory(object):
-    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle, TRIANGLE: Triangle, HEXAGON: Hexagon, SINE: Sine }
+    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle, TRIANGLE: Triangle, HEXAGON: Hexagon, COSINE: Cosine }
 
     @staticmethod
     def random(ptype, target):
         return PrimitiveFactory.PRIMITIVES[ptype].random(target)
 
     @staticmethod
-    def new(ptype, params, alpha):
-        return PrimitiveFactory.PRIMITIVES[ptype](params, alpha)
+    def new(ptype, params, alpha, *args, **kwargs):
+        return PrimitiveFactory.PRIMITIVES[ptype](params, alpha, *args, **kwargs)

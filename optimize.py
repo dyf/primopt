@@ -35,7 +35,6 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primi
 
         for cim, prim, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, prim_type=prim_type):
             scale_prim = prim.scale(float(f))
-            scale_prim.color = prim.color
 
             next_im = scale_prim.draw(current, target)
             error = primitive.image_error(next_im, target)
@@ -81,7 +80,7 @@ def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
             best_prim = next_prim
             best_error = error
 
-    return (best_error, best_prim.params, best_prim.color, best_prim.alpha)
+    return (best_error, best_prim)
 
 
 def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE, m_fac=.1):
@@ -101,19 +100,17 @@ def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primit
                 resps.append(resp)
 
             resps = [ r.get() for r in resps ]
+
             errors = np.array(r[0] for r in resps)
 
             best_i = np.argmin(errors)
-            best_error, best_params, best_color, best_alpha = resps[best_i]
+            best_error, best_prim = resps[best_i]
         else:
-            best_error, best_params, best_color, best_alpha = optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac)
-        
+            best_error, best_prim = optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac)
+
         if best_error > current_error:
             continue 
 
-        best_prim = primitive.PrimitiveFactory.new(prim_type, best_params, best_alpha)
-        best_prim.color = best_color
-        
         current = best_prim.draw(current, target)
         yield current, best_prim, pi+1
 
