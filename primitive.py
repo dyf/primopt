@@ -68,7 +68,7 @@ class ImagePrimitive(Primitive):
         if self.color is None:
             return current.copy()
 
-        return current * (1.0 - alpha) + image[:,:,np.newaxis] * self.color * self.alpha
+        return current * (1.0 - self.alpha) + image[:,:,np.newaxis] * self.color * self.alpha
 
 class Gaussian(ImagePrimitive):
     def rasterize(self, shape):
