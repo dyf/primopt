@@ -3,12 +3,13 @@ import scipy.misc
 
 import optimize as opt
 import primitive
+import numpy as np
 
 def save(i, save_its, out_dir, cim):
     if i % save_its == 0:
         path = os.path.join(out_dir, "%05d.png" % i)
         print(path)
-        scipy.misc.imsave(path, cim)
+        scipy.misc.imsave(path, np.clip(cim,0,1))
         
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")

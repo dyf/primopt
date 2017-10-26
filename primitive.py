@@ -1,4 +1,5 @@
 from skimage.draw import ellipse, polygon, circle
+from skimage.filters import gabor_kernel
 import numpy as np
 
 ELLIPSE = 'ellipse'
@@ -8,6 +9,7 @@ CIRCLE = 'circle'
 TRIANGLE = 'triangle'
 HEXAGON = 'hexagon'
 COSINE = 'cosine'
+GABOR = 'gabor'
 
 def image_error(image, target):    
     return ((image - target) ** 2).mean()
@@ -47,21 +49,56 @@ class ImagePrimitive(Primitive):
 
         return out
 
-class Cosine(ImagePrimitive):
+class Gabor(ImagePrimitive):
     def rasterize(self, shape):
-        sfx, sfy = self.params        
-        xx,yy = np.mgrid[0:shape[0],0:shape[1]]
+        im = np.zeros((shape[0],shape[1]))
 
-        return (np.cos(2*np.pi*xx*sfx) + np.cos(2*np.pi*yy*sfy))* 0.5 + 1
+        x, y, frequency, theta, sigma = self.params
+        x,y = int(x),int(y)
+        
+        if x >= shape[0] or y >= shape[1]:
+            return im
 
-    def scale(self, f):
-        sfx, sfy = self.params
-        return Cosine([sfx*f, sfy*f], self.alpha)
+        kernel = np.real(gabor_kernel(frequency, theta=theta))
+    
+        dx = x + kernel.shape[0] - shape[0]
+        dy = y + kernel.shape[1] - shape[1]
+        if dx > 0:
+            kernel = kernel[:kernel.shape[0]-dx,:]
+        if dy > 0:
+            kernel = kernel[:,:kernel.shape[1]-dy]
+        
+        im[x:x+kernel.shape[0],y:y+kernel.shape[1]] += kernel
+        return im
 
     @staticmethod
     def random(target):
-        r = np.random.rand(3)
-        return Cosine([ 1.0 / (target.shape[0] * r[0]), 1.0 / (target.shape[1] * r[1]) ], r[2]*2.0 - 1.0)
+        r = np.random.rand(4)
+        return Gabor([np.random.randint(2,target.shape[0]-2), np.random.randint(2,target.shape[1]-2),
+                      r[0] + (1.0 - r[0]) / target.shape[0], r[1]*np.pi, 
+                      r[2]*target.shape[0]], r[3])
+
+
+class Cosine(ImagePrimitive):
+    def rasterize(self, shape):
+        sfx, sfy, ax, ay = self.params
+        xx,yy = np.mgrid[0:shape[0],0:shape[1]]
+        cx = 2 * ax * np.cos(np.pi*xx*(2*sfx+1)/shape[0])
+        cy = 2 * ay * np.cos(np.pi*yy*(2*sfy+1)/shape[1])
+        return cx * cy
+
+    def scale(self, f):        
+        sfx,xfy, ax, ay = self.params.shape
+        return Cosine([sfx*f, sfy*f, ax, ay], self.alpha)
+
+    @staticmethod
+    def random(target):
+        r = np.random.rand(4)
+        return Cosine([r[0]*target.shape[0], r[1]*target.shape[1], r[2]*target.shape[0], r[3]*target.shape[1]], 1.0)
+
+    def mutate(self, d):
+        r = np.random.randn(4) * d
+        return self.__class__(r * self.params, 1.0)
                       
 
 class ShapePrimitive(Primitive):
@@ -182,7 +219,7 @@ class Hexagon(Polygon):
     sides = 6
 
 class PrimitiveFactory(object):
-    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle, TRIANGLE: Triangle, HEXAGON: Hexagon, COSINE: Cosine }
+    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle, TRIANGLE: Triangle, HEXAGON: Hexagon, COSINE: Cosine, GABOR: Gabor }
 
     @staticmethod
     def random(ptype, target):

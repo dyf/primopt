@@ -8,7 +8,7 @@ import multiprocessing as mp
 
 
 
-def init_pool(procs=None):
+def init_pool(procs=None):    
     global POOL
     if procs is None:
         procs = mp.cpu_count()
