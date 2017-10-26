@@ -10,6 +10,7 @@ TRIANGLE = 'triangle'
 HEXAGON = 'hexagon'
 COSINE = 'cosine'
 GABOR = 'gabor'
+GAUSSIAN = 'gaussian'
 
 def image_error(image, target):    
     return ((image - target) ** 2).mean()
@@ -19,35 +20,85 @@ def rot2d(th):
                      [ np.sin(th), np.cos(th) ]])
 
 class Primitive(object):
-    def __init__(self, params, alpha):
+    def __init__(self, params, alpha, color=None):
         self.params = np.array(params)
         self.alpha = float(alpha)
+        self.color = color
         
     def error(self, current, target):
         blend = self.draw(current, target)
-
         return image_error(blend, target)
+        
+    def select_color(self, current, target, px):
+        if len(px[0]) == 0:
+            return None
+        idx = np.random.choice(len(px[0]))
+        return target[px[0][idx], px[1][idx], :]
 
     def mutate(self, d):
         r = 1 + np.random.randn(len(self.params)+1) * d
         return self.__class__(r[:-1] * self.params, self.alpha * r[-1])
 
-class ImagePrimitive(Primitive):
-    def __init__(self, params, alpha):
-        super(ImagePrimitive, self).__init__(params, alpha)        
-        self.channel = None
 
+
+class ShapePrimitive(Primitive):       
+
+    def draw(self, current, target):
+        
+        mask_px = self.rasterize(target.shape)
+
+        out = current.copy()
+
+        if self.color is None:
+            self.color = self.select_color(current, target, mask_px)
+        
+        if self.color is None:
+            return out
+        
+        out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
+
+        return out
+
+class ImagePrimitive(Primitive):
     def draw(self, current, target):
         image = self.rasterize(target.shape)
 
-        out = current.copy()
+        if self.color is None:
+            self.color = self.select_color(current, target, np.where(image != 0))
+        if self.color is None:
+            return current.copy()
+
+        return current * (1.0 - alpha) + image[:,:,np.newaxis] * self.color * self.alpha
+
+class Gaussian(ImagePrimitive):
+    def rasterize(self, shape):
+        x, y, sx, sy, th = self.params
+        w = 3 * max(sx, sy) * np.sqrt(2)
+        h = w
+
+        xx,yy = np.mgrid[0:w,0:h]
+        if th != 0:
+            st = np.sin(th)
+            ct = np.cos(th)
+            xr = xx*ct - yy*st
+            yr = xx*st + yy*ct  
+            xx, yy = xr, yr
         
-        if self.channel is None:
-            self.channel = np.random.randint(0,3)
+        kernel = numpy.exp(-(((w*0.5-xx)/sx)**2+((h*0.5-yy)/sy)**2)/2.)
 
-        out[:,:,self.channel] += image * self.alpha
+        dx = x + kernel.shape[0] - shape[0]
+        dy = y + kernel.shape[1] - shape[1]
+        if dx > 0:
+            kernel = kernel[:kernel.shape[0]-dx,:]
+        if dy > 0:
+            kernel = kernel[:,:kernel.shape[1]-dy]
+        
+        im = np.zeros(shape)
+        im[x:x+kernel.shape[0],y:y+kernel.shape[1]] += kernel
 
-        return out
+        return im
+
+
 
 class Gabor(ImagePrimitive):
     def rasterize(self, shape):
@@ -73,10 +124,14 @@ class Gabor(ImagePrimitive):
 
     @staticmethod
     def random(target):
-        r = np.random.rand(4)
+        r = np.random.rand(7)
         return Gabor([np.random.randint(2,target.shape[0]-2), np.random.randint(2,target.shape[1]-2),
                       r[0] + (1.0 - r[0]) / target.shape[0], r[1]*np.pi, 
-                      r[2]*target.shape[0]], r[3])
+                      r[2]*target.shape[0]], r[3], r[4:])
+
+    def mutate(self, d):
+        r = 1 + np.random.randn(len(self.params)+4) * d
+        return self.__class__(r[:-4] * self.params, self.alpha * r[-4], self.color*r[-3:])
 
 
 class Cosine(ImagePrimitive):
@@ -101,29 +156,7 @@ class Cosine(ImagePrimitive):
         return self.__class__(r * self.params, 1.0)
                       
 
-class ShapePrimitive(Primitive):
-    def __init__(self, params, alpha, color=None):
-        super(ShapePrimitive, self).__init__(params, alpha)        
-        self.color = color
-        
-    def select_color(self, current, target, mask_px):
-        idx = np.random.choice(len(mask_px[0]))
-        return target[mask_px[0][idx], mask_px[1][idx], :].copy()
 
-    def draw(self, current, target):
-        mask_px = self.rasterize(target.shape)
-
-        out = current.copy()
-
-        if len(mask_px[0]) == 0:
-            return out
-        
-        if self.color is None:
-            self.color = self.select_color(current, target, mask_px)
-
-        out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
-
-        return out
 
 class Ellipse(ShapePrimitive):
     def rasterize(self, shape):
