@@ -36,7 +36,7 @@ def main():
         for cim, prim, i in opt.optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
             save(i, args.save_its, args.out_dir, cim)
     else:
-        for cim, prim, i in opt.optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):
+        for cim, prim, i in opt.optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):            
             save(i, args.save_its, args.out_dir, cim)
 
 if __name__ == "__main__": main()

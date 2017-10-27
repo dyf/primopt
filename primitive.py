@@ -1,4 +1,4 @@
-from skimage.draw import ellipse, polygon, circle
+from skimage.draw import ellipse, polygon, circle, line
 from skimage.filters import gabor_kernel
 import numpy as np
 
@@ -11,6 +11,10 @@ HEXAGON = 'hexagon'
 COSINE = 'cosine'
 GABOR = 'gabor'
 GAUSSIAN = 'gaussian'
+LINE = 'line'
+
+ADD = 'add'
+COMPOSITE = 'composite'
 
 def image_error(image, target):    
     return ((image - target) ** 2).mean()
@@ -23,8 +27,9 @@ class Primitive(object):
     def __init__(self, params, alpha, color=None):
         self.params = np.array(params)
         self.alpha = float(alpha)
-        self.color = color
-        
+        self.color = color        
+        self.mode = COMPOSITE
+
     def error(self, current, target):
         blend = self.draw(current, target)
         return image_error(blend, target)
@@ -55,8 +60,10 @@ class ShapePrimitive(Primitive):
         if self.color is None:
             return out
         
-        out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
-
+        if self.mode == COMPOSITE:
+            out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
+        elif self.mode == ADD:
+            out[mask_px[0], mask_px[1], :] += self.color * self.alpha
         return out
 
 class ImagePrimitive(Primitive):
@@ -68,7 +75,13 @@ class ImagePrimitive(Primitive):
         if self.color is None:
             return current.copy()
 
-        return current * (1.0 - self.alpha) + image[:,:,np.newaxis] * self.color * self.alpha
+        if self.mode == ADD:
+            mix = current + image[:,:,np.newaxis] * self.color * self.alpha
+        elif self.mode == COMPOSITE:
+            mix = current * (1.0 - self.alpha) + image[:,:,np.newaxis] * self.color * self.alpha
+        
+        
+        return mix
 
 class Gaussian(ImagePrimitive):
     def rasterize(self, shape):
@@ -85,7 +98,7 @@ class Gaussian(ImagePrimitive):
             xx, yy = xr, yr
         
         kernel = numpy.exp(-(((w*0.5-xx)/sx)**2+((h*0.5-yy)/sy)**2)/2.)
-
+        
         dx = x + kernel.shape[0] - shape[0]
         dy = y + kernel.shape[1] - shape[1]
         if dx > 0:
@@ -101,6 +114,10 @@ class Gaussian(ImagePrimitive):
 
 
 class Gabor(ImagePrimitive):
+    def __init__(self, *args, **kwargs):
+        super(Gabor, self).__init__(*args, **kwargs)
+        self.mode = ADD
+
     def rasterize(self, shape):
         im = np.zeros((shape[0],shape[1]))
 
@@ -110,7 +127,7 @@ class Gabor(ImagePrimitive):
         if x >= shape[0] or y >= shape[1]:
             return im
 
-        kernel = np.real(gabor_kernel(frequency, theta=theta))
+        kernel = np.real(gabor_kernel(frequency, theta=theta, sigma_x=4, sigma_y=4))
     
         dx = x + kernel.shape[0] - shape[0]
         dy = y + kernel.shape[1] - shape[1]
@@ -119,7 +136,8 @@ class Gabor(ImagePrimitive):
         if dy > 0:
             kernel = kernel[:,:kernel.shape[1]-dy]
         
-        im[x:x+kernel.shape[0],y:y+kernel.shape[1]] += kernel
+        im[x:x+kernel.shape[0],y:y+kernel.shape[1]] += kernel        
+
         return im
 
     @staticmethod
@@ -156,7 +174,22 @@ class Cosine(ImagePrimitive):
         return self.__class__(r * self.params, 1.0)
                       
 
+class Line(ShapePrimitive):
+    def rasterize(self, shape):
+        x1, y1, x2, y2 = self.params
+        x1, x2 = np.clip([x1,x2], 0, shape[0]-1).astype(int)
+        y1, y2 = np.clip([y1,y2], 0, shape[1]-1).astype(int)
+        
+        return line(x1, y1, x2, y2)
 
+    def scale(self, f):
+        x1, y1, x2, y2 = self.params
+        return Line([x1*f, y1*f, x2*f, y2*f], self.alpha)
+
+    @staticmethod
+    def random(target):
+        r = np.random.rand(5)
+        return Line(r[:4] * np.array([ target.shape[0]-1, target.shape[1]-1, target.shape[0]-1, target.shape[1]-1]), r[-1])
 
 class Ellipse(ShapePrimitive):
     def rasterize(self, shape):
@@ -252,7 +285,15 @@ class Hexagon(Polygon):
     sides = 6
 
 class PrimitiveFactory(object):
-    PRIMITIVES = { ELLIPSE: Ellipse, ROTATED_RECTANGLE: RotatedRectangle, RECTANGLE: Rectangle, CIRCLE: Circle, TRIANGLE: Triangle, HEXAGON: Hexagon, COSINE: Cosine, GABOR: Gabor }
+    PRIMITIVES = { ELLIPSE: Ellipse, 
+                   ROTATED_RECTANGLE: RotatedRectangle, 
+                   RECTANGLE: Rectangle, 
+                   CIRCLE: Circle, 
+                   TRIANGLE: Triangle, 
+                   HEXAGON: Hexagon, 
+                   COSINE: Cosine, 
+                   GABOR: Gabor,
+                   LINE: Line }
 
     @staticmethod
     def random(ptype, target):
