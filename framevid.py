@@ -6,7 +6,10 @@ import glob
 def framevid(pattern, fps, output):
     file_names = glob.glob(pattern)
     animation = mpy.ImageSequenceClip(file_names, fps=fps)
-    animation.write_videofile(output, fps=fps)
+    if output.endswith('.gif'):
+        animation.write_gif(output, fps=fps)
+    else:
+        animation.write_videofile(output, fps=fps)
 
 def main():
     parser = argparse.ArgumentParser()

@@ -19,8 +19,11 @@ def init_pool(procs=None):
         POOL = None
 
 
-def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type):
-    current = mode_image(target)
+def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type, current):
+    if current is None:
+        current = mode_image(target)
+    else:
+        current = current.copy()
 
     pi = 1
     for level in range(levels,0,-1):
@@ -33,7 +36,7 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type):
 
         current_error = primitive.image_error(current, target)
 
-        for cim, prim, i in optimize_image(target_level, r_its, m_its, n_prims, current_level, prim_type=prim_type):
+        for cim, prim, i in optimize_image(target_level, r_its, m_its, n_prims, prim_type, current_level):
             scale_prim = prim.scale(float(f))
 
             next_im = scale_prim.draw(current, target)

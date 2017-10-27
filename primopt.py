@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--save-its', help="how of to save intermediate images (e.g. every 100 frames)", type=int, default=10)
     parser.add_argument('--prim', help="what type of primitive to use", default='ellipse')
     parser.add_argument('--procs', help="how many processes to use", default=None, type=int)
+    parser.add_argument('--init-image', default=None)
 
     args = parser.parse_args()
 
@@ -31,12 +32,23 @@ def main():
     im = scipy.misc.imread(args.image).astype(float) / 255.0
     if args.zoom:
         im = im[::args.zoom,::args.zoom,:]
+    
+    init_image = None
+    init_i = 0
+    if args.init_image:
+        init_image = scipy.misc.imread(args.init_image)
+        assert np.allclose(init_image.shape, im.shape)
+        base, ext = os.path.splitext(os.path.basename(args.init_image))
+        try:
+            init_i = int(base)
+        except:
+            pass    
 
     if args.levels > 1:
-        for cim, prim, i in opt.optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim):
-            save(i, args.save_its, args.out_dir, cim)
+        for cim, prim, i in opt.optimize_image_levels(im, args.r_its, args.m_its, args.N, args.levels, prim_type=args.prim, current=init_image):
+            save(i+init_i, args.save_its, args.out_dir, cim)
     else:
-        for cim, prim, i in opt.optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim):            
-            save(i, args.save_its, args.out_dir, cim)
+        for cim, prim, i in opt.optimize_image(im, args.r_its, args.m_its, args.N, prim_type=args.prim, current=init_image):            
+            save(i+init_i, args.save_its, args.out_dir, cim)
 
 if __name__ == "__main__": main()
