@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--zoom', help="zoom level of target image (e.g. optimize a 2x smaller version of input)", type=int, default=None)
     parser.add_argument('--levels', help="number of levels of detail", type=int, default=1)
     parser.add_argument('--save-its', help="how of to save intermediate images (e.g. every 100 frames)", type=int, default=10)
-    parser.add_argument('--prim', help="what type of primitive to use", default=primitive.ELLIPSE)
+    parser.add_argument('--prim', help="what type of primitive to use", default='ellipse')
     parser.add_argument('--procs', help="how many processes to use", default=None, type=int)
 
     args = parser.parse_args()

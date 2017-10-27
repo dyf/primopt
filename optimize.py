@@ -19,7 +19,7 @@ def init_pool(procs=None):
         POOL = None
 
 
-def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primitive.ELLIPSE):
+def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type):
     current = mode_image(target)
 
     pi = 1
@@ -55,7 +55,7 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type=primi
 
         print("finished level %d" % level)
 
-    for cim, prim, i in optimize_image(target, r_its, m_its, n_prims, current, prim_type=prim_type):
+    for cim, prim, i in optimize_image(target, r_its, m_its, n_prims, prim_type, current):
         yield cim, prim, pi
         pi += 1
 
@@ -83,7 +83,7 @@ def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
     return (best_error, best_prim)
 
 
-def optimize_image(target, r_its, m_its, n_prims, current=None, prim_type=primitive.ELLIPSE, m_fac=.1):
+def optimize_image(target, r_its, m_its, n_prims, prim_type, current=None, m_fac=.1):
     if current is None:
         current = mode_image(target)
     else:

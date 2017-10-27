@@ -1,17 +1,6 @@
-from skimage.draw import ellipse, polygon, circle, line
+from skimage.draw import ellipse, polygon, circle, line, bezier_curve
 from skimage.filters import gabor_kernel
 import numpy as np
-
-ELLIPSE = 'ellipse'
-ROTATED_RECTANGLE = 'rotated_rectangle'
-RECTANGLE = 'rectangle'
-CIRCLE = 'circle'
-TRIANGLE = 'triangle'
-HEXAGON = 'hexagon'
-COSINE = 'cosine'
-GABOR = 'gabor'
-GAUSSIAN = 'gaussian'
-LINE = 'line'
 
 ADD = 'add'
 COMPOSITE = 'composite'
@@ -191,6 +180,24 @@ class Line(ShapePrimitive):
         r = np.random.rand(5)
         return Line(r[:4] * np.array([ target.shape[0]-1, target.shape[1]-1, target.shape[0]-1, target.shape[1]-1]), r[-1])
 
+class Bezier(ShapePrimitive):
+    def rasterize(self, shape):
+        x1, y1, x2, y2, x3, y3, weight = self.params
+        x1, x2, x3 = np.clip([x1,x2,x3], 0, shape[0]-1).astype(int)
+        y1, y2, y3 = np.clip([y1,y2,y3], 0, shape[1]-1).astype(int)
+        
+        return bezier_curve(x1, y1, x2, y2, x3, y3, weight, shape=shape )
+
+    def scale(self, f):        
+        return Bezier(self.params * f, self.alpha)
+
+    @staticmethod
+    def random(target):
+        r = np.random.rand(8)
+        return Bezier(r[:7] * np.array([ target.shape[0]-1, target.shape[1]-1, 
+                                         target.shape[0]-1, target.shape[1]-1,
+                                         target.shape[0]-1, target.shape[1]-1, 8.0 ]), r[-1])
+  
 class Ellipse(ShapePrimitive):
     def rasterize(self, shape):
         x, y, r1, r2, rot = self.params
@@ -285,15 +292,16 @@ class Hexagon(Polygon):
     sides = 6
 
 class PrimitiveFactory(object):
-    PRIMITIVES = { ELLIPSE: Ellipse, 
-                   ROTATED_RECTANGLE: RotatedRectangle, 
-                   RECTANGLE: Rectangle, 
-                   CIRCLE: Circle, 
-                   TRIANGLE: Triangle, 
-                   HEXAGON: Hexagon, 
-                   COSINE: Cosine, 
-                   GABOR: Gabor,
-                   LINE: Line }
+    PRIMITIVES = { 'ellipse': Ellipse, 
+                   'rotated_rectangle': RotatedRectangle, 
+                   'rectangle': Rectangle, 
+                   'circle': Circle, 
+                   'triangle': Triangle, 
+                   'hexagon': Hexagon, 
+                   'cosine': Cosine, 
+                   'gabor': Gabor,
+                   'line': Line,
+                   'bezier': Bezier }
 
     @staticmethod
     def random(ptype, target):
