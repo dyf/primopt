@@ -72,6 +72,28 @@ class ImagePrimitive(Primitive):
         
         return mix
 
+class Crescent(ImagePrimitive):
+    def rasterize(self, current, target):
+        x, y, r1, r2, th, offset = self.params        
+        e1 = ellipse(x, y, r1, r2, shape[:2], th)
+
+        x2,y2 = x + off*np.cos(th), y + off*np.sin(th)
+        e2 = ellipse(x2, y2, r1, r2, shape[:2], th)
+
+        im = np.zeros(current.shape[:2])
+        im[e1] = 1
+        im[e2] = 0
+        return im
+
+    @staticmethod
+    def random(target):
+        r = np.random.rand(7)
+        return Crescent(r[:6] * np.array([target.shape[0], target.shape[1], target.shape[0]*.5, target.shape[1]*.5, 2*np.pi, r[2]*target.shape[0]*.5]), r[[-1]])
+
+    def scale(self, f):
+        x, y, r1, r2, th, offset = self.params        
+        return Crescent([x*f, y*f, r1*f, r2*f, th, offset*f], self.alpha)
+
 class Gaussian(ImagePrimitive):
     def rasterize(self, shape):
         x, y, sx, sy, th = self.params
@@ -99,6 +121,15 @@ class Gaussian(ImagePrimitive):
         im[x:x+kernel.shape[0],y:y+kernel.shape[1]] += kernel
 
         return im
+
+    @staticmethod
+    def random(target):
+        r = np.random.rand(6)
+        return Gaussian(r[:5] * np.array([target.shape[0], target.shape[1], target.shape[0]*.5, target.shape[1]*.5, 2*np.pi]), r[[-1]])
+
+    def scale(self, f):
+        x, y, sx, sy, th = self.params      
+        return Crescent([x*f, y*f, sx*f, sy*f, th], self.alpha)
 
 
 
@@ -301,7 +332,9 @@ class PrimitiveFactory(object):
                    'cosine': Cosine, 
                    'gabor': Gabor,
                    'line': Line,
-                   'bezier': Bezier }
+                   'bezier': Bezier,
+                   'gaussian': Gaussian,
+                   'crescent': Crescent }
 
     @staticmethod
     def random(ptype, target):
