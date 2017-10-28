@@ -5,7 +5,7 @@ import numpy as np
 ADD = 'add'
 COMPOSITE = 'composite'
 
-def image_error(image, target):    
+def image_error(image, target):        
     return ((image - target) ** 2).mean()
 
 def rot2d(th):
@@ -27,7 +27,7 @@ class Primitive(object):
         if len(px[0]) == 0:
             return None
         idx = np.random.choice(len(px[0]))
-        return target[px[0][idx], px[1][idx], :]
+        return target[px[0][idx], px[1][idx], :].copy()
 
     def mutate(self, d):
         r = 1 + np.random.randn(len(self.params)+1) * d
@@ -58,37 +58,42 @@ class ShapePrimitive(Primitive):
 class ImagePrimitive(Primitive):
     def draw(self, current, target):
         image = self.rasterize(target.shape)
+        mask_px = np.where(image != 0)
 
         if self.color is None:
-            self.color = self.select_color(current, target, np.where(image != 0))
+            self.color = self.select_color(current, target, mask_px)
+        
+        out = current.copy()
         if self.color is None:
-            return current.copy()
+            return out
 
-        if self.mode == ADD:
-            mix = current + image[:,:,np.newaxis] * self.color * self.alpha
-        elif self.mode == COMPOSITE:
-            mix = current * (1.0 - self.alpha) + image[:,:,np.newaxis] * self.color * self.alpha
-        
-        
-        return mix
+        if self.mode == COMPOSITE:
+            out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
+        elif self.mode == ADD:
+            out[mask_px[0], mask_px[1], :] += self.color * self.alpha
+        return out    
 
 class Crescent(ImagePrimitive):
-    def rasterize(self, current, target):
-        x, y, r1, r2, th, offset = self.params        
+    def rasterize(self, shape):
+        x, y, r1, r2, th, offset = self.params                
         e1 = ellipse(x, y, r1, r2, shape[:2], th)
 
-        x2,y2 = x + off*np.cos(th), y + off*np.sin(th)
+        x2,y2 = x + offset*np.cos(th), y + offset*np.sin(th)
+
         e2 = ellipse(x2, y2, r1, r2, shape[:2], th)
 
-        im = np.zeros(current.shape[:2])
+        im = np.zeros(shape[:2], dtype=float)
         im[e1] = 1
         im[e2] = 0
+        
         return im
 
     @staticmethod
     def random(target):
         r = np.random.rand(7)
-        return Crescent(r[:6] * np.array([target.shape[0], target.shape[1], target.shape[0]*.5, target.shape[1]*.5, 2*np.pi, r[2]*target.shape[0]*.5]), r[[-1]])
+        return Crescent(np.array([target.shape[0]*r[0], target.shape[1]*r[1], 
+                                  target.shape[0]*.5*r[2], target.shape[1]*.5*r[3], 
+                                  2*np.pi*r[4], (r[5]-.5)*r[2]*target.shape[0]]), r[6])
 
     def scale(self, f):
         x, y, r1, r2, th, offset = self.params        
@@ -129,7 +134,7 @@ class Gaussian(ImagePrimitive):
 
     def scale(self, f):
         x, y, sx, sy, th = self.params      
-        return Crescent([x*f, y*f, sx*f, sy*f, th], self.alpha)
+        return Gaussian([x*f, y*f, sx*f, sy*f, th], self.alpha)
 
 
 

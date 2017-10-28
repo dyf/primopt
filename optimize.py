@@ -21,7 +21,7 @@ def init_pool(procs=None):
 
 def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type, current):
     if current is None:
-        current = mode_image(target)
+        current = mean_image(target)
     else:
         current = current.copy()
 
@@ -71,10 +71,12 @@ def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
 
     for i in range(r_its):
         prim = primitive.PrimitiveFactory.random(prim_type, target)
-        error = prim.error(current, target)
+        error = prim.error(current, target)        
+        
         if error < best_error:
             best_prim = prim
             best_error = error
+    
                 
     for i in range(m_its):
         next_prim = best_prim.mutate(m_fac)
@@ -88,7 +90,7 @@ def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
 
 def optimize_image(target, r_its, m_its, n_prims, prim_type, current=None, m_fac=.1):
     if current is None:
-        current = mode_image(target)
+        current = mean_image(target)
     else:
         current = current.copy()
 
@@ -122,6 +124,11 @@ def mode_image(im):
     out[:,:,0] = scipy.stats.mode(im[:,:,0], axis=None).mode[0]
     out[:,:,1] = scipy.stats.mode(im[:,:,1], axis=None).mode[0]
     out[:,:,2] = scipy.stats.mode(im[:,:,2], axis=None).mode[0]
+    return out
+
+def mean_image(im):
+    out = np.ones_like(im)
+    out[:,:,:] = im.mean(axis=(0,1))
     return out
 
 POOL = None
