@@ -21,6 +21,9 @@ Or: personal challenge to see how quickly I could hack something like https://gi
 ### Curvy Kermit
 ![Curvy Kermit](https://github.com/dyf/primopt/blob/master/examples/kermit.png)
 
+### Statler and Waldorf Crescents
+![Statler and Waldorf Crescents](https://github.com/dyf/primopt/blob/master/examples/statdorf.png)
+
 ### Pseudocode
 1) Pick `M` random circles (position, size) with random alpha and random color chosen from input image
 2) Pick the circle that has minimal RMSE error when blended into current canvas
