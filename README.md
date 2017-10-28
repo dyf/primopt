@@ -18,6 +18,9 @@ Or: personal challenge to see how quickly I could hack something like https://gi
 ### Hexagonal Animal
 ![Animal in Hexagons](https://github.com/dyf/primopt/blob/master/examples/animal.png)
 
+### Curvy Kermit
+![Curvy Kermit](https://github.com/dyf/primopt/blob/master/examples/kermit.png)
+
 ### Pseudocode
 1) Pick `M` random circles (position, size) with random alpha and random color chosen from input image
 2) Pick the circle that has minimal RMSE error when blended into current canvas
