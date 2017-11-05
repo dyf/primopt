@@ -4,6 +4,7 @@ import numpy as np
 
 ADD = 'add'
 COMPOSITE = 'composite'
+COLOR_FROM_TARGET = 'color_from_target'
 
 def image_error(image, target):        
     return ((image - target) ** 2).mean()
@@ -13,11 +14,13 @@ def rot2d(th):
                      [ np.sin(th), np.cos(th) ]])
 
 class Primitive(object):
-    def __init__(self, params, alpha, color=None):
+    def __init__(self, params, alpha=None, color=COLOR_FROM_TARGET, mutate_alpha=True, mutate_color=False):
         self.params = np.array(params)
-        self.alpha = float(alpha)
-        self.color = color        
+        self.alpha = float(alpha) if alpha is not None else 1.0
+        self.color = color
         self.mode = COMPOSITE
+        self.mutate_alpha = mutate_alpha
+        self.mutate_color = mutate_color
 
     def error(self, current, target):
         blend = self.draw(current, target)
@@ -25,17 +28,25 @@ class Primitive(object):
         
     def select_color(self, current, target, px):
         if len(px[0]) == 0:
-            return None
+            return self.color
         idx = np.random.choice(len(px[0]))
         return target[px[0][idx], px[1][idx], :].copy()
 
     def mutate(self, d):
-        r = 1 + np.random.randn(len(self.params)+1) * d
-        return self.__class__(r[:-1] * self.params, self.alpha * r[-1])
+        params = self.params * (1 + np.random.randn(len(self.params)) * d)                
+        alpha = self.alpha if not self.mutate_alpha else self.alpha * (1 + np.random.randn(1)) * d
+        color = self.color if not self.mutate_color else self.color * (1 + np.random.randn(3)) * d
+        return self.__class__(params, alpha=alpha, color=color, mutate_alpha=self.mutate_alpha, mutate_color=self.mutate_color)
+
+    @classmethod
+    def random(cls, target, **kwargs):        
+        if kwargs.get('alpha', None) is None:
+            kwargs['alpha'] = np.random.rand() 
+        return cls(cls.random_params(target), **kwargs)
 
 
 
-class ShapePrimitive(Primitive):       
+class ShapePrimitive(Primitive):
 
     def draw(self, current, target):
         
@@ -43,12 +54,11 @@ class ShapePrimitive(Primitive):
 
         out = current.copy()
 
-        if self.color is None:
-            self.color = self.select_color(current, target, mask_px)
-        
-        if self.color is None:
-            return out
-        
+        if self.color is COLOR_FROM_TARGET:
+            self.color = self.select_color(current, target, mask_px)        
+            if self.color is COLOR_FROM_TARGET:
+                return out
+
         if self.mode == COMPOSITE:
             out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
         elif self.mode == ADD:
@@ -60,12 +70,13 @@ class ImagePrimitive(Primitive):
         image = self.rasterize(target.shape)
         mask_px = np.where(image != 0)
 
-        if self.color is None:
-            self.color = self.select_color(current, target, mask_px)
-        
         out = current.copy()
-        if self.color is None:
-            return out
+
+        if self.color is COLOR_FROM_TARGET:
+            self.color = self.select_color(current, target, mask_px)        
+        
+            if self.color is COLOR_FROM_TARGET:
+                return out
 
         if self.mode == COMPOSITE:
             out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
@@ -89,11 +100,11 @@ class Crescent(ImagePrimitive):
         return im
 
     @staticmethod
-    def random(target):
-        r = np.random.rand(7)
-        return Crescent(np.array([target.shape[0]*r[0], target.shape[1]*r[1], 
-                                  target.shape[0]*.5*r[2], target.shape[1]*.5*r[3], 
-                                  2*np.pi*r[4], (r[5]-.5)*r[2]*target.shape[0]]), r[6])
+    def random_params(target):
+        r = np.random.rand(6)
+        return np.array([target.shape[0]*r[0], target.shape[1]*r[1], 
+                         target.shape[0]*.5*r[2], target.shape[1]*.5*r[3], 
+                         2*np.pi*r[4], (r[5]-.5)*r[2]*target.shape[0]])
 
     def scale(self, f):
         x, y, r1, r2, th, offset = self.params        
@@ -128,9 +139,9 @@ class Gaussian(ImagePrimitive):
         return im
 
     @staticmethod
-    def random(target):
-        r = np.random.rand(6)
-        return Gaussian(r[:5] * np.array([target.shape[0], target.shape[1], target.shape[0]*.5, target.shape[1]*.5, 2*np.pi]), r[[-1]])
+    def random_params(target):
+        r = np.random.rand(5)
+        return r * np.array([target.shape[0], target.shape[1], target.shape[0]*.5, target.shape[1]*.5, 2*np.pi])
 
     def scale(self, f):
         x, y, sx, sy, th = self.params      
@@ -166,11 +177,11 @@ class Gabor(ImagePrimitive):
         return im
 
     @staticmethod
-    def random(target):
-        r = np.random.rand(7)
-        return Gabor([np.random.randint(2,target.shape[0]-2), np.random.randint(2,target.shape[1]-2),
-                      r[0] + (1.0 - r[0]) / target.shape[0], r[1]*np.pi, 
-                      r[2]*target.shape[0]], r[3], r[4:])
+    def random_params(target):
+        r = np.random.rand(3)
+        return r * np.array([np.random.randint(2,target.shape[0]-2), np.random.randint(2,target.shape[1]-2),
+                            r[0] + (1.0 - r[0]) / target.shape[0], r[1]*np.pi, 
+                            r[2]*target.shape[0]])
 
     def mutate(self, d):
         r = 1 + np.random.randn(len(self.params)+4) * d
@@ -190,13 +201,9 @@ class Cosine(ImagePrimitive):
         return Cosine([sfx*f, sfy*f, ax, ay], self.alpha)
 
     @staticmethod
-    def random(target):
+    def random_params(target):
         r = np.random.rand(4)
-        return Cosine([r[0]*target.shape[0], r[1]*target.shape[1], r[2]*target.shape[0], r[3]*target.shape[1]], 1.0)
-
-    def mutate(self, d):
-        r = np.random.randn(4) * d
-        return self.__class__(r * self.params, 1.0)
+        return r * np.array([target.shape[0], target.shape[1], target.shape[0], target.shape[1]])
                       
 
 class Line(ShapePrimitive):
@@ -212,9 +219,9 @@ class Line(ShapePrimitive):
         return Line([x1*f, y1*f, x2*f, y2*f], self.alpha)
 
     @staticmethod
-    def random(target):
-        r = np.random.rand(5)
-        return Line(r[:4] * np.array([ target.shape[0]-1, target.shape[1]-1, target.shape[0]-1, target.shape[1]-1]), r[-1])
+    def random_params(target):
+        r = np.random.rand(4)
+        return r * np.array([ target.shape[0]-1, target.shape[1]-1, target.shape[0]-1, target.shape[1]-1 ])
 
 class Bezier(ShapePrimitive):
     def rasterize(self, shape):
@@ -228,11 +235,11 @@ class Bezier(ShapePrimitive):
         return Bezier(self.params * f, self.alpha)
 
     @staticmethod
-    def random(target):
-        r = np.random.rand(8)
-        return Bezier(r[:7] * np.array([ target.shape[0]-1, target.shape[1]-1, 
-                                         target.shape[0]-1, target.shape[1]-1,
-                                         target.shape[0]-1, target.shape[1]-1, 8.0 ]), r[-1])
+    def random_params(target):
+        r = np.random.rand(7)
+        return r * np.array([ target.shape[0]-1, target.shape[1]-1, 
+                              target.shape[0]-1, target.shape[1]-1,
+                              target.shape[0]-1, target.shape[1]-1, 8.0 ])
   
 class Ellipse(ShapePrimitive):
     def rasterize(self, shape):
@@ -244,11 +251,10 @@ class Ellipse(ShapePrimitive):
         return Ellipse([x*f, y*f, r1*f, r2*f, rot], self.alpha)
 
     @staticmethod
-    def random(target):
+    def random_params(target):
         w = min(target.shape[:2])
         r = np.random.rand(5)
-        return Ellipse(r * np.array([ target.shape[0], target.shape[1], (w+1)*0.5, (w+1)*0.5, 2.0*np.pi]), 
-                       np.random.rand())
+        return r * np.array([ target.shape[0], target.shape[1], (w+1)*0.5, (w+1)*0.5, 2.0*np.pi ])
 
 class Rectangle(ShapePrimitive):
     def rasterize(self, shape):
@@ -261,10 +267,9 @@ class Rectangle(ShapePrimitive):
         return Rectangle([x*f, y*f, w*f, h*f], self.alpha, self.color)
 
     @staticmethod
-    def random(target):
+    def random_params(target):
         r = np.random.rand(4)
-        return Rectangle(r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1]),
-                         np.random.rand())
+        return r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1])
 
 class RotatedRectangle(ShapePrimitive):
     def rasterize(self, shape):
@@ -280,10 +285,10 @@ class RotatedRectangle(ShapePrimitive):
         return RotatedRectangle([x*f, y*f, w*f, h*f, th], self.alpha, self.color)
 
     @staticmethod
-    def random(target):
+    def random_params(target):
         r = np.random.rand(5)
-        return RotatedRectangle(r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1, 2.0*np.pi]),
-                                np.random.rand())
+        return r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1, 2.0*np.pi])
+
 class Circle(ShapePrimitive):
     def rasterize(self, shape):
         x,y,r = self.params
@@ -294,10 +299,9 @@ class Circle(ShapePrimitive):
         return Circle([x*f,y*f,r*f], self.alpha, self.color)
 
     @staticmethod
-    def random(target):
+    def random_params(target):
         r = np.random.rand(3)
-        return Circle(r * np.array([target.shape[0], target.shape[1], min(target.shape[:2])]),
-                      np.random.rand())
+        return r * np.array([target.shape[0], target.shape[1], min(target.shape[:2])])
 
 class Polygon(ShapePrimitive):
     def rasterize(self, shape):
@@ -314,12 +318,11 @@ class Polygon(ShapePrimitive):
         x,y,r,th = self.params
         return self.__class__([x*f,y*f,r*f,th], self.alpha, self.color)
 
-    @classmethod
-    def random(cls, target):
+    @staticmethod
+    def random_params(target):
         r = np.random.rand(4)
         w = np.min(target.shape[:2])
-        return cls(r * np.array([ target.shape[0], target.shape[1], w*0.5, 2*np.pi ]),
-                   np.random.rand())
+        return r * np.array([ target.shape[0], target.shape[1], w*0.5, 2*np.pi ])
 
 class Triangle(Polygon):
     sides = 3
@@ -342,9 +345,9 @@ class PrimitiveFactory(object):
                    'crescent': Crescent }
 
     @staticmethod
-    def random(ptype, target):
-        return PrimitiveFactory.PRIMITIVES[ptype].random(target)
+    def random(ptype, target, **kwargs):        
+        return PrimitiveFactory.PRIMITIVES[ptype].random(target, **kwargs)
 
     @staticmethod
-    def new(ptype, params, alpha, *args, **kwargs):
-        return PrimitiveFactory.PRIMITIVES[ptype](params, alpha, *args, **kwargs)
+    def new(ptype, params, *args, **kwargs):
+        return PrimitiveFactory.PRIMITIVES[ptype](params, *args, **kwargs)

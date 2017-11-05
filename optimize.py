@@ -63,14 +63,16 @@ def optimize_image_levels(target, r_its, m_its, n_prims, levels, prim_type, curr
         pi += 1
 
 
-def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
+def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac, prim_props=None):
     np.random.seed(seed=int(time.time())+os.getpid())
+
+    prim_props = prim_props if prim_props else {}
     
     best_error = float("inf")
     best_prim = None
 
     for i in range(r_its):
-        prim = primitive.PrimitiveFactory.random(prim_type, target)
+        prim = primitive.PrimitiveFactory.random(prim_type, target, **prim_props)
         error = prim.error(current, target)        
         
         if error < best_error:
@@ -88,7 +90,7 @@ def optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac):
     return (best_error, best_prim)
 
 
-def optimize_image(target, r_its, m_its, n_prims, prim_type, current=None, m_fac=.1):
+def optimize_image(target, r_its, m_its, n_prims, prim_type, current=None, m_fac=.1, prim_props=None, m_props=None):
     if current is None:
         current = mean_image(target)
     else:
@@ -101,7 +103,7 @@ def optimize_image(target, r_its, m_its, n_prims, prim_type, current=None, m_fac
             nprocs = POOL._processes
             resps = []
             for i in range(POOL._processes):
-                resp = POOL.apply_async(optimize_image_primitive, args=(target, current, r_its//nprocs, m_its//nprocs, prim_type, m_fac))
+                resp = POOL.apply_async(optimize_image_primitive, args=(target, current, r_its//nprocs, m_its//nprocs, prim_type, m_fac, prim_props))
                 resps.append(resp)
 
             resps = [ r.get() for r in resps ]
@@ -111,7 +113,7 @@ def optimize_image(target, r_its, m_its, n_prims, prim_type, current=None, m_fac
             best_i = np.argmin(errors)
             best_error, best_prim = resps[best_i]
         else:
-            best_error, best_prim = optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac)
+            best_error, best_prim = optimize_image_primitive(target, current, r_its, m_its, prim_type, m_fac, prim_props)
 
         if best_error > current_error:
             continue 
