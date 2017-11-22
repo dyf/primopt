@@ -1,3 +1,5 @@
+import numpy as np
+
 # f(x) = a*x*x*x + b*x*x + c*x + d
 # f'(x) = 3*a*x*x + 2*b*x + c
 #
@@ -19,6 +21,7 @@
 # a = x1 - x0 - dx0 - 0.5 * (dx1 - dx0 - 3*(x1 - x0 - dx0))
 def cubic_spline_coeffs(ps, vs):
     coeffs = []
+    N = len(ps)
     for i in range(N-1):
         p0 = ps[i]
         p1 = ps[i+1]
@@ -41,3 +44,13 @@ def cubic_spline(ps, vs, N):
         v = a*t**3 + b*t**2 + c*t + d
         vs.append(v)
     return np.concatenate(vs).T
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    Np=4
+    Nt=100 
+    p = np.random.random((Np,2))*2-1
+    v = np.random.random((Np,2))*2-1
+    xy = cubic_spline(p, v, Nt)    
+    plt.plot(xy[0,:], xy[1,:])
+    plt.show()
