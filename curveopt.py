@@ -60,7 +60,7 @@ class SplinePrimitive(object):
         spl.add_random_point()
         return spl
 
-def gradient_image(im):
+def gradient_image(im, norm_pct=95):
     if len(im.shape) == 2:
         gx, gy = np.gradient(im)
     else:
@@ -68,11 +68,16 @@ def gradient_image(im):
         gx = gx.max(axis=2)
         gy = gy.max(axis=2)
 
-    return np.sqrt(gx*gx + gy*gy)
-            
+    gmag = np.sqrt(gx*gx + gy*gy)
+    if norm_pct is not None:
+        v = np.percentile(gmag[:], 95)
+        return gmag / v
+    else:
+        return gmag
 
 def curveopt(im, N_pts=100, N_init=100, N_rand=100):
     gim = gradient_image(im)
+    print(gim.min(), gim.max())
     buf = np.zeros_like(gim)
 
     best_error = float("inf")
