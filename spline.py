@@ -19,30 +19,27 @@ import numpy as np
 # b = -dx1 + dx0 + 3*(x1 - x0 - dx0)
 #
 # a = x1 - x0 - dx0 - 0.5 * (dx1 - dx0 - 3*(x1 - x0 - dx0))
-def cubic_spline_coeffs(ps, vs):
-    coeffs = []
-    N = len(ps)
-    for i in range(N-1):
-        p0 = ps[i]
-        p1 = ps[i+1]
-        v0 = vs[i]
-        v1 = vs[i+1]
+def cubic_spline_coeffs(p0, v0, p1, v1):
+    d = p0
+    c = v0
+    b = -v1 + v0 + 3*(p1 - p0 - v0)
+    a = p1 - p0 - v0 - b
+    return [a,b,c,d]
 
-        d = p0
-        c = v0
-        b = -v1 + v0 + 3*(p1 - p0 - v0)
-        a = p1 - p0 - v0 - b        
-        coeffs.append([a,b,c,d])
-    
-    return np.array(coeffs)
+def cubic_spline_coeffs_list(ps, vs):
+    return [ cubic_spline_coeffs(ps[i], vs[i], ps[i+1], vs[i+1]) for i in range(len(ps)-1) ]
 
-def cubic_spline(ps, vs, N):
+def cubic_spline(N, ps=None, vs=None, coeffs_list=None):
     t = np.linspace(0,1,N)[np.newaxis].T
-    coeffs_list = cubic_spline_coeffs(ps,vs)        
+
+    if coeffs_list is None:
+        coeffs_list = cubic_spline_coeffs_list(ps, vs)
+        
     vs = []
     for a,b,c,d in coeffs_list:
         v = a*t**3 + b*t**2 + c*t + d
         vs.append(v)
+        
     return np.concatenate(vs).T
 
 if __name__ == "__main__":
