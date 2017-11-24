@@ -23,12 +23,14 @@ class SplinePrimitive(object):
         self.dims = 2
 
     def add_random_point(self):
+        s = np.random.choice([-1,1], size=(self.dims,))
         self.ps.append(np.random.random(self.dims))
-        self.vs.append(np.random.random(self.dims)*2-1)
+        self.vs.append(s*np.sqrt(np.random.random(self.dims)))
 
     def randomize_endpoint(self):
+        s = np.random.choice([-1,1], size=(self.dims,))
         self.ps[-1] = np.random.random(self.dims)
-        self.vs[-1] = np.random.random(self.dims)*2-1
+        self.vs[-1] = s*np.sqrt(np.random.random(self.dims))
 
     def mutate_endpoint(self, d):
         self.ps[-1] *= (np.random.randn(self.dims)*d + 1)
@@ -61,6 +63,7 @@ class SplinePrimitive(object):
         return spl
 
 def gradient_image(im, norm_pct=95):
+    im = im.astype(float)
     if len(im.shape) == 2:
         gx, gy = np.gradient(im)
     else:
@@ -75,9 +78,8 @@ def gradient_image(im, norm_pct=95):
     else:
         return gmag
 
-def curveopt(im, N_pts=100, N_init=100, N_rand=100):
+def curveopt(im, N_pts=100, N_init=1000, N_rand=1000):
     gim = gradient_image(im)
-    print(gim.min(), gim.max())
     buf = np.zeros_like(gim)
 
     best_error = float("inf")
@@ -139,9 +141,6 @@ def curveopt(im, N_pts=100, N_init=100, N_rand=100):
         best_spl.render(buf)
         yield buf
             
-
-    return best_s
-
 def main():
     im = imread("kermit.jpg")
     savedir = "/mnt/c/Users/davidf/workspace/curveopt/"
@@ -149,6 +148,6 @@ def main():
     for i, cim in enumerate(curveopt(im)):
         print(i)
         savepath = os.path.join(savedir, "test_%05d.jpg" % i)
-        imsave(savepath, cim)
+        imsave(savepath, 1.0 - cim)
 
 if __name__ == "__main__": main()
