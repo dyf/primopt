@@ -9,6 +9,9 @@ from scipy.misc import imread,imsave
 from skimage.draw import line
 from primitive import image_error
 import os
+import skimage.feature
+import skimage.color
+import scipy.ndimage.morphology
 
 def line_clipped(r0, c0, r1, c1, shape):
     ln = line(r0, c0, r1, c1)
@@ -72,7 +75,7 @@ class SplinePrimitive(object):
         im.fill(0)
         for i in range(xx.shape[1]-1):
             ln = line_clipped(xx[0,i],xx[1,i],xx[0,i+1],xx[1,i+1],im.shape)
-            im[ln] += 1
+            im[ln] = 1
         return im
     
     def mutate(self, d):
@@ -89,7 +92,7 @@ class SplinePrimitive(object):
         spl.add_random_point()
         return spl
 
-def gradient_image(im, norm_pct=95):
+def gradient_image(im, sqr=False, norm_pct=95):
     im = im.astype(float)
     if len(im.shape) == 2:
         gx, gy = np.gradient(im)
@@ -98,16 +101,28 @@ def gradient_image(im, norm_pct=95):
         gx = gx.max(axis=2)
         gy = gy.max(axis=2)
 
-    gmag = np.sqrt(gx*gx + gy*gy)
+    gmag = gx*gx + gy*gy
+
+    if sqr:
+        gmag = np.sqrt(gmag)
+        
     if norm_pct is not None:
         v = np.percentile(gmag[:], 95)
         return gmag / v
     else:
         return gmag
 
+def canny_dist_image(im, sigma):
+    gim = skimage.feature.canny(skimage.color.rgb2gray(im).astype(float), sigma=sigma).astype(float)
+    gim = scipy.ndimage.morphology.distance_transform_edt(1.0-gim)
+    return 1.0 / (gim + 1.0)
+
 def curveopt(im, N_pts=100, N_init=1000, N_rand=1000):
-    gim = gradient_image(im)
+    #gim = gradient_image(im)
+    gim = canny_dist_image(im, 2)
     buf = np.zeros_like(gim)
+    yield gim
+    print(gim.min(), gim.max())
 
     best_error = float("inf")
     best_spl = None
@@ -171,7 +186,7 @@ def main():
     im = imread("kermit.jpg")
     savedir = "/mnt/c/Users/davidf/workspace/curveopt/"
 
-    for i, cim in enumerate(curveopt(im)):
+    for i, cim in enumerate(curveopt(im, N_pts=200, N_init=5000, N_rand=5000)):
         print(i)
         savepath = os.path.join(savedir, "test_%05d.jpg" % i)
         imsave(savepath, 1.0 - cim.clip(0,1))
