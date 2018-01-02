@@ -29,6 +29,7 @@ class SplinePrimitive(object):
     def add_point(self, p, v):
         self.ps.append(p)
         self.vs.append(v)
+        return
         if len(self.ps) > 1:
             self.coeffs.append(spline.cubic_spline_coeffs(self.ps[-2], self.vs[-2],
                                                           self.ps[-1], self.vs[-1]))
@@ -37,6 +38,7 @@ class SplinePrimitive(object):
         self.ps[i] = p
         self.vs[i] = v
 
+        return
         if i < 0:
             i += len(self.ps)
             
@@ -47,7 +49,6 @@ class SplinePrimitive(object):
             self.coeffs[i] = spline.cubic_spline_coeffs(self.ps[i], self.vs[i],
                                                         self.ps[i+1], self.vs[i+1])
                                                         
-
     def add_random_point(self):
         s = np.random.choice([-1,1], size=(self.dims,))
         self.add_point(np.random.random(self.dims),
@@ -65,9 +66,28 @@ class SplinePrimitive(object):
                        np.random.randn(self.dims)*d + 1,
                        np.random.randn(self.dims)*d + 1)
 
+    def remove_endpoint(self):
+        del self.ps[-1]
+        del self.vs[-1]
+
+        return
+        if len(self.coeffs):
+            del self.coeffs[-1]
 
     def render(self, im, segs=20):
-        xx = spline.cubic_spline(segs, coeffs_list=self.coeffs)
+        import scipy.interpolate
+
+        t0 = np.linspace(0, 1, len(self.ps))
+        t1 = np.linspace(0, 1, len(self.ps)*segs)
+
+        try:
+            xx = np.array([ scipy.interpolate.interp1d(t0,  [ p[0] for p in self.ps ], kind='cubic')(t1),
+                            scipy.interpolate.interp1d(t0,  [ p[1] for p in self.ps ], kind='cubic')(t1) ])
+        except Exception as e:
+            print(self.ps)
+            raise
+        
+        # xx = spline.cubic_spline(segs, coeffs_list=self.coeffs)
         for i in range(self.dims):
             xx[i] *= im.shape[i]
         xx = xx.astype(int)
@@ -88,6 +108,8 @@ class SplinePrimitive(object):
     @classmethod
     def random(dims=2):
         spl = SplinePrimitive(dims)
+        spl.add_random_point()
+        spl.add_random_point()
         spl.add_random_point()
         spl.add_random_point()
         return spl
@@ -122,10 +144,9 @@ def curveopt(im, N_pts=100, N_init=1000, N_rand=1000):
     gim = canny_dist_image(im, 2)
     buf = np.zeros_like(gim)
     yield gim
-    print(gim.min(), gim.max())
 
-    best_error = float("inf")
     best_spl = None
+    best_error = float("inf")#image_error(buf,gim)
                                
     # pick a good starting point
     for i in range(N_init):
@@ -147,16 +168,17 @@ def curveopt(im, N_pts=100, N_init=1000, N_rand=1000):
             best_spl = new_spl
                                
     best_spl.render(buf)
+    best_error = image_error(buf,gim)
+    
     yield buf
                                
     # add new points
     for i in range(N_pts):
-        best_spl.add_random_point()
-                               
         best_p = None
         best_v = None
-        best_error = float("inf")
-
+        
+        best_spl.add_random_point()
+    
         for j in range(N_init):
             best_spl.randomize_endpoint()
             best_spl.render(buf)
@@ -177,10 +199,10 @@ def curveopt(im, N_pts=100, N_init=1000, N_rand=1000):
                 best_p = best_spl.ps[-1].copy()
                 best_v = best_spl.vs[-1].copy()
 
-        best_spl.set_point(-1, best_p, best_v)
-
-        best_spl.render(buf)
-        yield buf
+        if best_p is not None:
+            best_spl.set_point(-1, best_p, best_v)
+            best_spl.render(buf)
+            yield buf
                                
 def main():
     im = imread("kermit.jpg")
