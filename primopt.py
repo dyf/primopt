@@ -4,11 +4,16 @@ import scipy.misc
 import optimize as opt
 import primitive
 import numpy as np
+import primsvg
 
-def save(i, out_dir, cim):
-    path = os.path.join(out_dir, "%05d.png" % i)
-    print(path)
-    scipy.misc.imsave(path, np.clip(cim,0,1))
+def save(i, out_dir, cim, init_image, prims):
+    im_path = os.path.join(out_dir, "%05d.png" % i)
+    svg_path = os.path.join(out_dir, "%05d.svg" % i)
+    
+    scipy.misc.imsave(im_path, np.clip(cim,0,1))
+    primsvg.show(init_image, prims)
+
+
         
 def main():
     parser = argparse.ArgumentParser(description="compose an image from randomized primitives")
@@ -48,8 +53,11 @@ def main():
     else:
         init_image = opt.mean_image(im)
 
+    prims = []
     for i, (im, prim) in enumerate(optimizer.optimize(im, init_image)):
+        prims.append(prim)
         if i % args.save_its == 0:
-            save(i, args.out_dir, im)
+            save(i, args.out_dir, im, init_image, prims)
+            
 
 if __name__ == "__main__": main()

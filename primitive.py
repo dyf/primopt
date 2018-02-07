@@ -34,8 +34,8 @@ class Primitive(object):
 
     def mutate(self, d):
         params = self.params * (1 + np.random.randn(len(self.params)) * d)                
-        alpha = self.alpha if not self.mutate_alpha else self.alpha * (1 + np.random.randn(1)) * d
-        color = self.color if not self.mutate_color else self.color * (1 + np.random.randn(3)) * d
+        alpha = self.alpha if not self.mutate_alpha else np.clip(self.alpha * (1 + np.random.randn(1)) * d, 0, 1)
+        color = self.color if not self.mutate_color else np.clip(self.color * (1 + np.random.randn(3)) * d, 0, 1)
         return self.__class__(params, alpha=alpha, color=color, mutate_alpha=self.mutate_alpha, mutate_color=self.mutate_color)
 
     @classmethod
