@@ -96,9 +96,11 @@ class PrimitiveOptimizer(object):
             if best_error > current_error:
                 continue 
 
-            current = best_prim.draw(current, target)
-
-            yield current, best_prim
+            try:
+                current = best_prim.draw(current, target)
+                yield current, best_prim
+            except primitive.EmptyPrimitiveException as e:
+                pass
 
     def optimize_level(self, target, current, level):
         if level == 0:
@@ -112,9 +114,12 @@ class PrimitiveOptimizer(object):
             for _, prim in self.optimize_primitive(target_scale, current_scale):
 
                 prim_s = prim.scale(float(scale))
-                current = prim_s.draw(current, target)
 
-                yield current, prim_s
+                try:
+                    current = prim_s.draw(current, target)
+                    yield current, prim_s
+                except primitive.EmptyPrimitiveException as e:
+                    pass
 
     def optimize(self, target, current):
         current = current.copy()

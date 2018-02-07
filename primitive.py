@@ -4,7 +4,7 @@ import numpy as np
 
 ADD = 'add'
 COMPOSITE = 'composite'
-COLOR_FROM_TARGET = 'color_from_target'
+COLOR_FROM_TARGET = None
 
 def image_error(image, target):        
     return ((image - target) ** 2).mean()
@@ -12,6 +12,8 @@ def image_error(image, target):
 def rot2d(th):
     return np.array([[ np.cos(th), -np.sin(th)], 
                      [ np.sin(th), np.cos(th) ]])
+
+class EmptyPrimitiveException(Exception): pass
 
 class Primitive(object):
     def __init__(self, params, alpha=None, color=COLOR_FROM_TARGET, mutate_alpha=True, mutate_color=False):
@@ -23,8 +25,11 @@ class Primitive(object):
         self.mutate_color = mutate_color
 
     def error(self, current, target):
-        blend = self.draw(current, target)
-        return image_error(blend, target)
+        try:
+            blend = self.draw(current, target)
+            return image_error(blend, target)
+        except EmptyPrimitiveException as e:
+            return image_error(current, target)
         
     def select_color(self, current, target, px):
         if len(px[0]) == 0:
@@ -51,13 +56,13 @@ class ShapePrimitive(Primitive):
     def draw(self, current, target):
         
         mask_px = self.rasterize(target.shape)
+        if len(mask_px[0]) == 0:
+            raise EmptyPrimitiveException()
 
         out = current.copy()
 
         if self.color is COLOR_FROM_TARGET:
-            self.color = self.select_color(current, target, mask_px)        
-            if self.color is COLOR_FROM_TARGET:
-                return out
+            self.color = self.select_color(current, target, mask_px)            
 
         if self.mode == COMPOSITE:
             out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
@@ -70,13 +75,13 @@ class ImagePrimitive(Primitive):
         image = self.rasterize(target.shape)
         mask_px = np.where(image != 0)
 
+        if len(mask_px[0]) == 0:
+            raise EmptyPrimitiveException()
+
         out = current.copy()
 
         if self.color is COLOR_FROM_TARGET:
             self.color = self.select_color(current, target, mask_px)        
-        
-            if self.color is COLOR_FROM_TARGET:
-                return out
 
         if self.mode == COMPOSITE:
             out[mask_px[0], mask_px[1], :] = out[mask_px[0], mask_px[1], :] * (1.0 - self.alpha) + self.color * self.alpha
@@ -272,12 +277,21 @@ class Rectangle(ShapePrimitive):
         return r * np.array([target.shape[0], target.shape[1], target.shape[0]+1, target.shape[1]+1])
 
 class RotatedRectangle(ShapePrimitive):
-    def rasterize(self, shape):
+    def vertices(self):
         x,y,w,h,th = self.params
-        p = np.array([ [x, x, x+w, x+w], [y, y+h, y+h, y] ])
+        hh = h*0.5
+        hw = w*0.5
+        p = np.array([ [x-hw, x-hw, x+hw, x+hw], [y-hh, y+hh, y+hh, y-hh] ])
         if th != 0:            
             p = np.dot(rot2d(th), p)
-        
+            
+        p[0,:] += x
+        p[1,:] += y
+
+        return p
+    
+    def rasterize(self, shape):
+        p = self.vertices()
         return polygon(p[0,:], p[1,:], shape=shape)
         
     def scale(self, f):
@@ -304,7 +318,7 @@ class Circle(ShapePrimitive):
         return r * np.array([target.shape[0], target.shape[1], min(target.shape[:2])])
 
 class Polygon(ShapePrimitive):
-    def rasterize(self, shape):
+    def vertices(self):
         x,y,r,th = self.params
         angles = np.linspace(0, 2*np.pi, num=self.sides, endpoint=False)
         p =  np.array([ r * np.cos(angles), r * np.sin(angles) ])
@@ -312,7 +326,14 @@ class Polygon(ShapePrimitive):
         if th != 0:            
             p = np.dot(rot2d(th), p)
 
-        return polygon(p[0,:]+x, p[1,:]+y, shape=shape)
+        p[0,:] += x
+        p[1,:] += y
+
+        return p
+    
+    def rasterize(self, shape):
+        verts = self.vertices()
+        return polygon(verts[0,:], verts[1,:], shape=shape)
 
     def scale(self, f):
         x,y,r,th = self.params
