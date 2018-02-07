@@ -11,7 +11,7 @@ def save(i, out_dir, cim, init_image, prims):
     svg_path = os.path.join(out_dir, "%05d.svg" % i)
     
     scipy.misc.imsave(im_path, np.clip(cim,0,1))
-    primsvg.save(init_image, prims)
+    primsvg.save(init_image, prims, svg_path)
 
 
         
