@@ -26,4 +26,5 @@ def save(init_image, prims, path):
 
     plt.axis('off')
     plt.savefig(path, bbox_inches='tight')
+    plt.close()
     
