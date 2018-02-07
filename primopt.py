@@ -1,16 +1,18 @@
 import os, argparse
-import scipy.misc
 
 import optimize as opt
 import primitive
 import numpy as np
 import primsvg
+import imageio
 
 def save(i, out_dir, cim, init_image, prims):
     im_path = os.path.join(out_dir, "%05d.png" % i)
     svg_path = os.path.join(out_dir, "%05d.svg" % i)
+
+    print(im_path)
     
-    scipy.misc.imsave(im_path, np.clip(cim,0,1))
+    imageio.imsave(im_path, (np.clip(cim,0,1)*255.0).astype(np.uint8))
     primsvg.save(init_image, prims, svg_path)
 
 
@@ -38,12 +40,12 @@ def main():
                                        levels=args.levels,
                                        n_procs=args.procs)
 
-    im = scipy.misc.imread(args.image).astype(float) / 255.0
+    im = imageio.imread(args.image).astype(float) / 255.0
     
     init_image = None
     init_i = 0
     if args.init_image:
-        init_image = scipy.misc.imread(args.init_image)
+        init_image = imageio.imread(args.init_image)
         assert np.allclose(init_image.shape, im.shape)
         base, ext = os.path.splitext(os.path.basename(args.init_image))
         try:
